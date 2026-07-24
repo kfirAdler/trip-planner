@@ -5,6 +5,9 @@ import { IconSun, IconMoon } from "@/components/icons";
 function setTheme(theme: "light" | "dark") {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem("theme", theme);
+  window.dispatchEvent(
+    new CustomEvent("app-theme-change", { detail: { theme } })
+  );
 }
 
 function currentTheme(): "light" | "dark" {

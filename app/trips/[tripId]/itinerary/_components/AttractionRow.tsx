@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { CATEGORIES, CATEGORY_META } from "@/lib/categories";
 import {
   updateAttraction,
@@ -15,6 +16,8 @@ import {
   IconRemove,
   IconMoveUp,
   IconMoveDown,
+  IconChevronDown,
+  IconMap,
 } from "@/components/icons";
 
 export type Attraction = {
@@ -54,6 +57,7 @@ export function AttractionRow({
   isMoving?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const meta = CATEGORY_META[attraction.category];
 
   const updateAction = updateAttraction.bind(null, tripId, attraction.id);
@@ -144,54 +148,140 @@ export function AttractionRow({
   }
 
   return (
-    <div className="card-elevated flex gap-3 rounded-2xl border border-border bg-surface p-3">
-      {attraction.photoUrl && (
-        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-surface-muted">
-          <Image
-            src={attraction.photoUrl}
-            alt=""
-            fill
-            className="object-cover"
-            sizes="56px"
-          />
-        </div>
-      )}
-
-      <div className="flex flex-1 flex-col gap-0.5">
-        <div className="flex items-start justify-between gap-2">
-          <p className="flex items-center gap-1.5 leading-tight font-bold">
-            <meta.icon
-              size={15}
-              className="shrink-0"
-              style={{ color: meta.color }}
-              aria-hidden
+    <div className="card-elevated rounded-2xl border border-border bg-surface p-3">
+      <button
+        type="button"
+        onClick={() => setIsExpanded((expanded) => !expanded)}
+        aria-expanded={isExpanded}
+        className="flex w-full gap-3 text-left"
+      >
+        {attraction.photoUrl && (
+          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-surface-muted">
+            <Image
+              src={attraction.photoUrl}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="56px"
             />
-            {attraction.name}
-          </p>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {showDay && attraction.dayIndex !== null && (
-              <span className="rounded-full bg-surface-muted px-2 py-0.5 font-mono text-xs font-bold tabular-nums text-foreground-muted">
-                Day {attraction.dayIndex + 1}
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <p className="flex min-w-0 items-center gap-1.5 leading-tight font-bold">
+              <meta.icon
+                size={15}
+                className="shrink-0"
+                style={{ color: meta.color }}
+                aria-hidden
+              />
+              <span className="truncate">{attraction.name}</span>
+            </p>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {showDay && attraction.dayIndex !== null && (
+                <span className="rounded-full bg-surface-muted px-2 py-0.5 font-mono text-xs font-bold tabular-nums text-foreground-muted">
+                  Day {attraction.dayIndex + 1}
+                </span>
+              )}
+              {attraction.time && (
+                <span className="rounded-full bg-surface-muted px-2 py-0.5 font-mono text-xs font-bold tabular-nums text-foreground-muted">
+                  {attraction.time}
+                </span>
+              )}
+              <span
+                className={[
+                  "flex h-6 w-6 items-center justify-center rounded-full border border-border text-foreground-muted transition-transform duration-300",
+                  isExpanded ? "rotate-180" : "",
+                ].join(" ")}
+                aria-hidden
+              >
+                <IconChevronDown size={13} />
               </span>
+            </div>
+          </div>
+          {attraction.address && (
+            <p className="mt-1 truncate text-xs font-light text-foreground-muted">
+              {attraction.address}
+            </p>
+          )}
+          {!attraction.address && (
+            <p className="mt-1 text-xs font-light text-foreground-muted">
+              Tap to see details
+            </p>
+          )}
+        </div>
+      </button>
+
+      <div
+        className={[
+          "grid transition-[grid-template-rows] duration-300 ease-out",
+          isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        ].join(" ")}
+      >
+        <div className="overflow-hidden">
+          <div className="mt-3 border-t border-border pt-3">
+            <dl className="grid grid-cols-2 gap-3">
+              <div>
+                <dt className="font-mono text-[0.6rem] font-bold tracking-widest text-foreground-muted uppercase">
+                  Category
+                </dt>
+                <dd className="mt-0.5 flex items-center gap-1.5 text-sm font-bold">
+                  <meta.icon size={14} style={{ color: meta.color }} aria-hidden />
+                  {meta.label}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-mono text-[0.6rem] font-bold tracking-widest text-foreground-muted uppercase">
+                  Schedule
+                </dt>
+                <dd className="mt-0.5 text-sm font-bold">
+                  {attraction.dayIndex === null
+                    ? "Unscheduled"
+                    : `Day ${attraction.dayIndex + 1}`}
+                  {attraction.time ? ` · ${attraction.time}` : ""}
+                </dd>
+              </div>
+            </dl>
+
+            {attraction.address && (
+              <div className="mt-3">
+                <p className="font-mono text-[0.6rem] font-bold tracking-widest text-foreground-muted uppercase">
+                  Address
+                </p>
+                <p className="mt-0.5 text-sm font-light">{attraction.address}</p>
+              </div>
             )}
-            {attraction.time && (
-              <span className="rounded-full bg-surface-muted px-2 py-0.5 font-mono text-xs font-bold tabular-nums text-foreground-muted">
-                {attraction.time}
-              </span>
+
+            {attraction.notes && (
+              <div className="mt-3">
+                <p className="font-mono text-[0.6rem] font-bold tracking-widest text-foreground-muted uppercase">
+                  Notes
+                </p>
+                <p className="mt-0.5 whitespace-pre-wrap text-sm font-light text-foreground-muted">
+                  {attraction.notes}
+                </p>
+              </div>
+            )}
+
+            {attraction.lat !== null && attraction.lng !== null && (
+              <Link
+                href={
+                  attraction.dayIndex === null
+                    ? `/trips/${tripId}/map`
+                    : `/trips/${tripId}/map?day=${attraction.dayIndex + 1}`
+                }
+                className="mt-3 flex w-fit items-center gap-1.5 rounded-full bg-surface-muted px-3 py-1.5 text-xs font-bold text-primary"
+              >
+                <IconMap size={14} />
+                View on map
+              </Link>
             )}
           </div>
         </div>
-        {attraction.address && (
-          <p className="text-xs font-light text-foreground-muted">
-            {attraction.address}
-          </p>
-        )}
-        {attraction.notes && (
-          <p className="mt-1 text-xs font-light text-foreground-muted">
-            {attraction.notes}
-          </p>
-        )}
+      </div>
 
+      <div className="flex flex-col gap-0.5">
         {canEdit && attraction.dayIndex === null && (
           <form action={linkAction} className="mt-2 flex items-center gap-1.5">
             <select

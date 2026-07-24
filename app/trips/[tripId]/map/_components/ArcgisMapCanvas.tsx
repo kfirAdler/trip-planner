@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import esriConfig from "@arcgis/core/config.js";
 import EsriMap from "@arcgis/core/Map.js";
+import Basemap from "@arcgis/core/Basemap.js";
 import MapView from "@arcgis/core/views/MapView.js";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer.js";
 import Graphic from "@arcgis/core/Graphic.js";
@@ -18,6 +19,16 @@ type MappableAttraction = {
   lat: number;
   lng: number;
 };
+
+function navigationBasemap(isDark: boolean) {
+  return new Basemap({
+    style: {
+      id: isDark ? "arcgis/navigation-night" : "arcgis/navigation",
+      language: "en",
+      places: "all",
+    },
+  });
+}
 
 export function ArcgisMapCanvas({
   attractions,
@@ -63,7 +74,7 @@ export function ArcgisMapCanvas({
     });
 
     const map = new EsriMap({
-      basemap: isDark ? "dark-gray" : "gray",
+      basemap: navigationBasemap(isDark),
       layers: [layer],
     });
 
@@ -80,6 +91,21 @@ export function ArcgisMapCanvas({
       ui: { components: [] },
     });
     view.padding = { top: 0, right: 0, bottom: 80, left: 0 };
+
+    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleThemeChange = (event: Event) => {
+      const theme = (event as CustomEvent<{ theme: "light" | "dark" }>).detail
+        .theme;
+      map.basemap = navigationBasemap(theme === "dark");
+    };
+    const handleSystemThemeChange = (event: MediaQueryListEvent) => {
+      if (!document.documentElement.dataset.theme) {
+        map.basemap = navigationBasemap(event.matches);
+      }
+    };
+
+    window.addEventListener("app-theme-change", handleThemeChange);
+    systemTheme.addEventListener("change", handleSystemThemeChange);
 
     const clickHandle = view.on("click", async (event) => {
       const { results } = await view.hitTest(event, { include: layer });
@@ -99,6 +125,8 @@ export function ArcgisMapCanvas({
       .catch(() => {});
 
     return () => {
+      window.removeEventListener("app-theme-change", handleThemeChange);
+      systemTheme.removeEventListener("change", handleSystemThemeChange);
       clickHandle.remove();
       view.destroy();
     };
