@@ -14,8 +14,9 @@ import SimpleMarkerSymbol from "@arcgis/core/symbols/SimpleMarkerSymbol.js";
 import SimpleLineSymbol from "@arcgis/core/symbols/SimpleLineSymbol.js";
 import PictureMarkerSymbol from "@arcgis/core/symbols/PictureMarkerSymbol.js";
 import TextSymbol from "@arcgis/core/symbols/TextSymbol.js";
-import { queryPlacesNearPoint } from "@arcgis/core/rest/places.js";
+import { queryPlacesWithinExtent } from "@arcgis/core/rest/places.js";
 import PlacesQueryParameters from "@arcgis/core/rest/support/PlacesQueryParameters.js";
+import type PlaceResult from "@arcgis/core/rest/support/PlaceResult.js";
 import "@arcgis/core/assets/esri/themes/light/main.css";
 import { CATEGORY_META } from "@/lib/categories";
 import type { UserLocation } from "./TripMap";
@@ -109,7 +110,11 @@ export function ArcgisMapCanvas({
   selectedNearby: NearbyPlace | null;
   onSelect: (id: string | null) => void;
   onNearbySelect: (place: NearbyPlace | null) => void;
-  onNearbyStatusChange: (status: { count: number; loading: boolean }) => void;
+  onNearbyStatusChange: (status: {
+    count: number;
+    loading: boolean;
+    zoomIn: boolean;
+  }) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<MapView | null>(null);
@@ -335,36 +340,69 @@ export function ArcgisMapCanvas({
     });
 
     let placesRequest: AbortController | null = null;
+    let lastPlacesExtentKey = "";
     const nearbyHandle = reactiveUtils.watch(
       () => view.stationary,
       async (stationary) => {
-        if (!stationary || !view.center) return;
+        if (!stationary || !view.extent) return;
+
+        const visibleExtent = view.extent.clone();
+        const extentKey = [
+          visibleExtent.xmin,
+          visibleExtent.ymin,
+          visibleExtent.xmax,
+          visibleExtent.ymax,
+        ]
+          .map((coordinate) => Math.round(coordinate / 100))
+          .join(":");
+        if (extentKey === lastPlacesExtentKey) return;
+        lastPlacesExtentKey = extentKey;
 
         placesRequest?.abort();
         const request = new AbortController();
         placesRequest = request;
+
+        // ArcGIS limits a within-extent Places query to 20 km in either
+        // direction. The navigation basemap still supplies its own place
+        // labels at wider scales; interactive results resume after zooming in.
+        if (visibleExtent.width >= 19500 || visibleExtent.height >= 19500) {
+          nearbyLayer.removeAll();
+          onNearbyStatusChangeRef.current({
+            count: 0,
+            loading: false,
+            zoomIn: true,
+          });
+          return;
+        }
+
         onNearbyStatusChangeRef.current({
-          count: nearbyLayer.graphics.length / 2,
+          count: nearbyLayer.graphics.length,
           loading: true,
+          zoomIn: false,
         });
 
         try {
-          const result = await queryPlacesNearPoint(
-            new PlacesQueryParameters({
-              apiKey,
-              point: view.center,
-              radius: Math.min(
-                10000,
-                Math.max(500, Math.round(view.scale / 12))
-              ),
-              pageSize: 20,
-              icon: "svg",
-            }),
-            { signal: request.signal }
-          );
-          if (request !== placesRequest) return;
+          const places: PlaceResult[] = [];
+          let query: PlacesQueryParameters | null = new PlacesQueryParameters({
+            apiKey,
+            extent: visibleExtent,
+            pageSize: 20,
+            icon: "svg",
+          });
 
-          const graphics = result.results.flatMap((place) => {
+          while (query && places.length < 200) {
+            const result = await queryPlacesWithinExtent(query, {
+              signal: request.signal,
+            });
+            if (request !== placesRequest) return;
+            places.push(...result.results);
+            query = result.nextQueryParams ?? null;
+          }
+
+          const uniquePlaces = Array.from(
+            new Map(places.map((place) => [place.placeId, place])).values()
+          );
+          const graphics = uniquePlaces.map((place) => {
             const category = place.categories[0]?.label ?? "Place";
             const attributes = {
               kind: "nearby",
@@ -379,46 +417,34 @@ export function ArcgisMapCanvas({
               latitude: place.location.latitude,
             });
 
-            return [
-              new Graphic({
-                geometry: point,
-                symbol: new SimpleMarkerSymbol({
-                  color: [255, 255, 255, 0.95],
-                  size: 22,
-                  outline: { color: [23, 38, 61, 0.32], width: 1 },
-                }),
-                attributes,
+            return new Graphic({
+              geometry: point,
+              symbol: new PictureMarkerSymbol({
+                url:
+                  place.icon?.url ??
+                  "https://static.arcgis.com/icons/places/Default_Shop_or_Service_15.svg",
+                width: 18,
+                height: 18,
               }),
-              new Graphic({
-                geometry: point,
-                symbol: place.icon?.url
-                  ? new PictureMarkerSymbol({
-                      url: place.icon.url,
-                      width: 16,
-                      height: 16,
-                    })
-                  : new SimpleMarkerSymbol({
-                      color: [82, 103, 126, 0.9],
-                      size: 8,
-                      outline: { color: "#ffffff", width: 1 },
-                    }),
-                attributes,
-              }),
-            ];
+              attributes,
+            });
           });
 
           nearbyLayer.removeAll();
           nearbyLayer.addMany(graphics);
           onNearbyStatusChangeRef.current({
-            count: result.results.length,
+            count: uniquePlaces.length,
             loading: false,
+            zoomIn: false,
           });
         } catch (error) {
           if (request !== placesRequest) return;
+          lastPlacesExtentKey = "";
           if ((error as Error).name !== "AbortError") {
             onNearbyStatusChangeRef.current({
-              count: nearbyLayer.graphics.length / 2,
+              count: nearbyLayer.graphics.length,
               loading: false,
+              zoomIn: false,
             });
           }
         }
