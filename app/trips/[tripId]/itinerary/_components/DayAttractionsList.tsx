@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CATEGORY_META } from "@/lib/categories";
 import { moveAttraction } from "../actions";
+import { AddAttractionForm } from "./AddAttractionForm";
 import { AttractionRow, type Attraction } from "./AttractionRow";
 
 export function DayAttractionsList({
@@ -115,37 +116,57 @@ export function DayAttractionsList({
             : undefined;
 
         return (
-          <div
-            key={attraction.id}
-            ref={(element) => {
-              if (element) itemRefs.current.set(attraction.id, element);
-              else itemRefs.current.delete(attraction.id);
-            }}
-            className="relative flex gap-3"
-          >
-            <div className="relative z-10 flex w-[30px] shrink-0 justify-center pt-3.5">
-              <span
-                className={
-                  isTerminus
-                    ? "h-4 w-4 shrink-0 rounded-full ring-[3px] ring-background"
-                    : "h-3 w-3 shrink-0 rounded-full ring-[3px] ring-background"
-                }
-                style={{ background: meta.color }}
-              />
+          <div key={attraction.id} className="contents">
+            <div
+              ref={(element) => {
+                if (element) itemRefs.current.set(attraction.id, element);
+                else itemRefs.current.delete(attraction.id);
+              }}
+              className="relative flex gap-3"
+            >
+              <div className="relative z-10 flex w-[30px] shrink-0 justify-center pt-3.5">
+                <span
+                  className={
+                    isTerminus
+                      ? "h-4 w-4 shrink-0 rounded-full ring-[3px] ring-background"
+                      : "h-3 w-3 shrink-0 rounded-full ring-[3px] ring-background"
+                  }
+                  style={{ background: meta.color }}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <AttractionRow
+                  tripId={tripId}
+                  attraction={attraction}
+                  dayCount={dayCount}
+                  canEdit={canEdit}
+                  isFirst={index === 0}
+                  isLast={index === items.length - 1}
+                  isMoving={movingId !== null}
+                  onMove={(direction) => move(attraction.id, direction)}
+                  searchBias={searchBias}
+                />
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <AttractionRow
-                tripId={tripId}
-                attraction={attraction}
-                dayCount={dayCount}
-                canEdit={canEdit}
-                isFirst={index === 0}
-                isLast={index === items.length - 1}
-                isMoving={movingId !== null}
-                onMove={(direction) => move(attraction.id, direction)}
-                searchBias={searchBias}
-              />
-            </div>
+            {canEdit && index < items.length - 1 && (
+              <div className="relative z-10 pl-[42px]">
+                <AddAttractionForm
+                  tripId={tripId}
+                  dayIndex={attraction.dayIndex as number}
+                  insertAfterId={attraction.id}
+                  variant="between"
+                  searchBias={
+                    attraction.lat !== null && attraction.lng !== null
+                      ? {
+                          lat: attraction.lat,
+                          lng: attraction.lng,
+                          label: attraction.name,
+                        }
+                      : searchBias
+                  }
+                />
+              </div>
+            )}
           </div>
         );
       })}

@@ -47,6 +47,10 @@ async function nextPositionForDay(tripId: string, dayIndex: number) {
   return (last?.position ?? -1) + 1;
 }
 
+function hasSortableTime(time: string | null): time is string {
+  return time !== null && /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
+}
+
 export async function addAttraction(
   tripId: string,
   dayIndex: number,
@@ -61,21 +65,67 @@ export async function addAttraction(
     photoUrl = (await saveImage(photoFile, { prefix: "attraction" })).url;
   }
 
-  await prisma.attraction.create({
-    data: {
-      tripId,
-      name: parsed.name,
-      category: parsed.category as Category,
-      dayIndex,
-      position: await nextPositionForDay(tripId, dayIndex),
-      time: parsed.time || null,
-      address: parsed.address || null,
-      lat: parsed.lat ?? null,
-      lng: parsed.lng ?? null,
-      notes: parsed.notes || null,
-      photoUrl,
-      createdById: userId,
-    },
+  const insertAfterId = String(formData.get("insertAfterId") ?? "").trim();
+
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.attraction.findMany({
+      where: { tripId, dayIndex },
+      orderBy: { position: "asc" },
+      select: { id: true, position: true, time: true },
+    });
+
+    const created = await tx.attraction.create({
+      data: {
+        tripId,
+        name: parsed.name,
+        category: parsed.category as Category,
+        dayIndex,
+        position: (existing.at(-1)?.position ?? -1) + 1,
+        time: parsed.time || null,
+        address: parsed.address || null,
+        lat: parsed.lat ?? null,
+        lng: parsed.lng ?? null,
+        notes: parsed.notes || null,
+        photoUrl,
+        createdById: userId,
+      },
+      select: { id: true, position: true, time: true },
+    });
+
+    const ordered = [...existing];
+
+    if (hasSortableTime(created.time)) {
+      // Place the new stop chronologically among the day's timed stops without
+      // disturbing the user's existing manual order for untimed stops.
+      const laterTimedIndex = existing.findIndex(
+        (item) =>
+          hasSortableTime(item.time) &&
+          item.time.localeCompare(created.time as string) > 0
+      );
+      const lastTimedIndex = existing.findLastIndex((item) =>
+        hasSortableTime(item.time)
+      );
+      const insertionIndex =
+        laterTimedIndex >= 0
+          ? laterTimedIndex
+          : lastTimedIndex >= 0
+            ? lastTimedIndex + 1
+            : existing.length;
+      ordered.splice(insertionIndex, 0, created);
+    } else {
+      const requestedIndex = existing.findIndex((item) => item.id === insertAfterId);
+      const insertionIndex = requestedIndex >= 0 ? requestedIndex + 1 : existing.length;
+      ordered.splice(insertionIndex, 0, created);
+    }
+
+    await Promise.all(
+      ordered.map((item, position) =>
+        tx.attraction.update({
+          where: { id: item.id },
+          data: { position },
+        })
+      )
+    );
   });
 
   revalidatePath(`/trips/${tripId}/itinerary`);
