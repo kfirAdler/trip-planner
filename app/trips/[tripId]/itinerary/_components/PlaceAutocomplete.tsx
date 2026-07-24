@@ -172,26 +172,10 @@ export function PlaceAutocomplete({
         {suggestionList("address")}
       </div>
 
-      <div className="flex gap-2">
-        <input
-          name="lat"
-          type="number"
-          step="any"
-          placeholder="Latitude (optional)"
-          value={lat}
-          onChange={(event) => setLat(event.target.value)}
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
-        />
-        <input
-          name="lng"
-          type="number"
-          step="any"
-          placeholder="Longitude (optional)"
-          value={lng}
-          onChange={(event) => setLng(event.target.value)}
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
-        />
-      </div>
+      {/* Coordinates are map metadata populated by ArcGIS. They still submit
+          with the form, but aren't useful editing controls for travelers. */}
+      <input name="lat" type="hidden" value={lat} readOnly />
+      <input name="lng" type="hidden" value={lng} readOnly />
     </div>
   );
 }
