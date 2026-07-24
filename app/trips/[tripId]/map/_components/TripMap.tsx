@@ -3,7 +3,11 @@
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { CATEGORY_META } from "@/lib/categories";
-import { IconClose } from "@/components/icons";
+import {
+  IconBack,
+  IconChevronRight,
+  IconClose,
+} from "@/components/icons";
 import type { Category } from "@/app/generated/prisma/client";
 
 type MappableAttraction = {
@@ -42,20 +46,50 @@ export function TripMap({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const byId = useMemo(() => new Map(attractions.map((a) => [a.id, a])), [attractions]);
   const selected = selectedId ? byId.get(selectedId) : null;
+  const selectedIndex = selected
+    ? attractions.findIndex((attraction) => attraction.id === selected.id)
+    : -1;
+
+  function selectAt(index: number) {
+    const attraction = attractions[index];
+    if (attraction) setSelectedId(attraction.id);
+  }
 
   return (
     <div className="relative flex-1">
-      <ArcgisMapCanvas attractions={attractions} apiKey={apiKey} onSelect={setSelectedId} />
-      {selected && <DetailSheet attraction={selected} onClose={() => setSelectedId(null)} />}
+      <ArcgisMapCanvas
+        attractions={attractions}
+        apiKey={apiKey}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+      />
+      {selected && (
+        <DetailSheet
+          attraction={selected}
+          canGoBack={selectedIndex > 0}
+          canGoNext={selectedIndex < attractions.length - 1}
+          onBack={() => selectAt(selectedIndex - 1)}
+          onNext={() => selectAt(selectedIndex + 1)}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
     </div>
   );
 }
 
 function DetailSheet({
   attraction,
+  canGoBack,
+  canGoNext,
+  onBack,
+  onNext,
   onClose,
 }: {
   attraction: MappableAttraction;
+  canGoBack: boolean;
+  canGoNext: boolean;
+  onBack: () => void;
+  onNext: () => void;
   onClose: () => void;
 }) {
   const meta = CATEGORY_META[attraction.category];
@@ -88,6 +122,26 @@ function DetailSheet({
       {attraction.notes && (
         <p className="text-sm font-light text-foreground-muted">{attraction.notes}</p>
       )}
+      <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-3">
+        <button
+          type="button"
+          onClick={onBack}
+          disabled={!canGoBack}
+          className="flex h-10 items-center justify-center gap-2 rounded-full border border-border text-sm font-bold transition-colors hover:border-primary/50 hover:text-primary disabled:pointer-events-none disabled:opacity-30"
+        >
+          <IconBack size={16} />
+          Back
+        </button>
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={!canGoNext}
+          className="flex h-10 items-center justify-center gap-2 rounded-full bg-primary text-sm font-bold text-primary-foreground transition-opacity disabled:pointer-events-none disabled:opacity-30"
+        >
+          Next
+          <IconChevronRight size={16} />
+        </button>
+      </div>
     </div>
   );
 }

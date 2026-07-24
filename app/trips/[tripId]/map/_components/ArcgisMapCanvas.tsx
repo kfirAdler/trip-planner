@@ -47,13 +47,16 @@ function routeLineSymbol(isDark: boolean) {
 export function ArcgisMapCanvas({
   attractions,
   apiKey,
+  selectedId,
   onSelect,
 }: {
   attractions: MappableAttraction[];
   apiKey: string;
+  selectedId: string | null;
   onSelect: (id: string | null) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<MapView | null>(null);
   // Keep the latest callback/data available to the click handler without
   // re-running the whole setup effect (which would tear down/rebuild the map).
   const onSelectRef = useRef(onSelect);
@@ -61,6 +64,31 @@ export function ArcgisMapCanvas({
   useEffect(() => {
     onSelectRef.current = onSelect;
   }, [onSelect]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    const selected = attractions.find((attraction) => attraction.id === selectedId);
+    if (!view) return;
+
+    view.padding = {
+      top: 0,
+      right: 0,
+      bottom: selected ? 260 : 80,
+      left: 0,
+    };
+
+    if (!selected) return;
+
+    view
+      .goTo(
+        {
+          center: [selected.lng, selected.lat],
+          zoom: Math.max(view.zoom, 14),
+        },
+        { animate: true, duration: 450 }
+      )
+      .catch(() => {});
+  }, [attractions, selectedId]);
 
   useEffect(() => {
     if (!containerRef.current || attractions.length === 0) return;
@@ -152,6 +180,7 @@ export function ArcgisMapCanvas({
       // as required by Esri's terms of use.
       ui: { components: [] },
     });
+    viewRef.current = view;
     view.padding = { top: 0, right: 0, bottom: 80, left: 0 };
 
     const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
@@ -197,6 +226,7 @@ export function ArcgisMapCanvas({
       window.removeEventListener("app-theme-change", handleThemeChange);
       systemTheme.removeEventListener("change", handleSystemThemeChange);
       clickHandle.remove();
+      viewRef.current = null;
       view.destroy();
     };
   }, [apiKey, attractions]);
