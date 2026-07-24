@@ -1,0 +1,153 @@
+@import "tailwindcss";
+
+/*
+  Design language: this app is built around one honest fact about the trip —
+  it is stitched together by trains. Every day in the itinerary threads
+  through a station. So the app borrows the vernacular of a Japan Rail
+  departure board and a paper boarding pass, rather than a generic
+  travel-app palette: sumi-ink text on IC-card paper, a night-platform navy
+  for full-bleed moments, a hanko stamp red for action, and category colors
+  drawn from the JR line-color family (each category IS a "line" you ride
+  that day). Assistant carries voice; a monospace face carries data (times,
+  day numbers, tallies) the way a station board does.
+*/
+
+:root {
+  color-scheme: light dark;
+
+  --paper: light-dark(#eef1ee, #11161c);
+  --paper-raised: light-dark(#ffffff, #1a212a);
+  --paper-muted: light-dark(#e2e6e0, #232b35);
+  --ink: light-dark(#15181d, #f1eee3);
+  --ink-muted: light-dark(#666d63, #9aa39a);
+  --rule: light-dark(#d5d9d0, #2b3540);
+
+  --primary: light-dark(#17263d, #8caed4);
+  --primary-foreground: light-dark(#f3efe4, #0f1620);
+  --accent: light-dark(#c33a2c, #e8776b);
+  --accent-foreground: light-dark(#fbf3ea, #1a100d);
+
+  --shadow-card: light-dark(
+    0 1px 2px rgb(0 0 0 / 0.04),
+    0 1px 2px rgb(0 0 0 / 0.3)
+  ),
+    light-dark(0 8px 24px -12px rgb(0 0 0 / 0.12), 0 8px 24px -12px rgb(0 0 0 / 0.5));
+
+  /* Fixed brand colors for full-bleed "night platform" hero treatments
+     (login, trip cover) — intentionally NOT theme-aware, so the hero always
+     reads the same way regardless of light/dark toggle. */
+  --hero-bg: #17263d;
+  --hero-foreground: #f3efe4;
+  --hero-accent: #c33a2c;
+
+  /* Category colors double as "line colors" in the itinerary rail and stay
+     fixed across light/dark — a line's color doesn't change at night. */
+  --cat-food: #e0982a;
+  --cat-sightseeing: #6fa828;
+  --cat-shopping: #b0356b;
+  --cat-transport: #1e7fb8;
+  --cat-lodging: #9c6b30;
+  --cat-other: #74777d;
+}
+
+/* Manual override — set by the theme toggle / pre-hydration script. Absent
+   this attribute, `color-scheme: light dark` above lets the OS preference
+   decide, which is the desired first-visit fallback. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: var(--font-assistant), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", monospace;
+
+  --color-background: var(--paper);
+  --color-surface: var(--paper-raised);
+  --color-surface-muted: var(--paper-muted);
+  --color-foreground: var(--ink);
+  --color-foreground-muted: var(--ink-muted);
+  --color-border: var(--rule);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-hero-bg: var(--hero-bg);
+  --color-hero-foreground: var(--hero-foreground);
+  --color-hero-accent: var(--hero-accent);
+
+  --color-cat-food: var(--cat-food);
+  --color-cat-sightseeing: var(--cat-sightseeing);
+  --color-cat-shopping: var(--cat-shopping);
+  --color-cat-transport: var(--cat-transport);
+  --color-cat-lodging: var(--cat-lodging);
+  --color-cat-other: var(--cat-other);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-weight: 400;
+}
+
+* {
+  border-color: var(--rule);
+}
+
+/* Shared card elevation — a soft layered shadow instead of a flat hairline
+   border reads as current (2025/26-era) rather than the flat-bordered look. */
+.card-elevated {
+  box-shadow: var(--shadow-card);
+}
+
+/* A tap should feel like a tap everywhere it's used. */
+.pressable {
+  transition: transform 150ms ease;
+}
+.pressable:active {
+  transform: scale(0.98);
+}
+
+/* Sun/moon glyphs in the theme toggle — both render; CSS (not JS state)
+   decides which is visible, so there's no mounted-state flicker. */
+[data-theme-icon="sun"],
+[data-theme-icon="moon"] {
+  display: none;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) [data-theme-icon="sun"] {
+    display: block;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) [data-theme-icon="moon"] {
+    display: block;
+  }
+}
+:root[data-theme="light"] [data-theme-icon="sun"] {
+  display: block;
+}
+:root[data-theme="dark"] [data-theme-icon="moon"] {
+  display: block;
+}
+
+/* Native <details> gets a JS-free animated expand/collapse where supported;
+   degrades to an instant toggle elsewhere. */
+details {
+  interpolate-size: allow-keywords;
+}
+details::details-content {
+  overflow: hidden;
+  transition:
+    height 0.25s ease,
+    content-visibility 0.25s allow-discrete;
+}
