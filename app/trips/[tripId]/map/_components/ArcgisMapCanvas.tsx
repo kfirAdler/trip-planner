@@ -18,6 +18,7 @@ import { queryPlacesNearPoint } from "@arcgis/core/rest/places.js";
 import PlacesQueryParameters from "@arcgis/core/rest/support/PlacesQueryParameters.js";
 import "@arcgis/core/assets/esri/themes/light/main.css";
 import { CATEGORY_META } from "@/lib/categories";
+import type { UserLocation } from "./TripMap";
 import type { Category } from "@/app/generated/prisma/client";
 
 type MappableAttraction = {
@@ -56,10 +57,43 @@ function routeLineSymbol(isDark: boolean) {
   });
 }
 
+function drawUserLocation(
+  layer: GraphicsLayer,
+  location: UserLocation | null
+) {
+  layer.removeAll();
+  if (!location) return;
+
+  const point = new Point({
+    longitude: location.lng,
+    latitude: location.lat,
+  });
+  layer.addMany([
+    new Graphic({
+      geometry: point,
+      symbol: new SimpleMarkerSymbol({
+        color: [47, 128, 237, 0.22],
+        size: 30,
+        outline: { color: [47, 128, 237, 0.35], width: 1 },
+      }),
+    }),
+    new Graphic({
+      geometry: point,
+      symbol: new SimpleMarkerSymbol({
+        color: [47, 128, 237, 1],
+        size: 12,
+        outline: { color: "#ffffff", width: 3 },
+      }),
+    }),
+  ]);
+}
+
 export function ArcgisMapCanvas({
   attractions,
   apiKey,
   initialCenter,
+  userLocation,
+  locateRequest,
   selectedId,
   selectedNearby,
   onSelect,
@@ -69,6 +103,8 @@ export function ArcgisMapCanvas({
   attractions: MappableAttraction[];
   apiKey: string;
   initialCenter?: { lat: number; lng: number };
+  userLocation: UserLocation | null;
+  locateRequest: number;
   selectedId: string | null;
   selectedNearby: NearbyPlace | null;
   onSelect: (id: string | null) => void;
@@ -77,6 +113,8 @@ export function ArcgisMapCanvas({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<MapView | null>(null);
+  const userLocationLayerRef = useRef<GraphicsLayer | null>(null);
+  const userLocationRef = useRef(userLocation);
   // Keep the latest callback/data available to the click handler without
   // re-running the whole setup effect (which would tear down/rebuild the map).
   const onSelectRef = useRef(onSelect);
@@ -94,6 +132,27 @@ export function ArcgisMapCanvas({
   useEffect(() => {
     onNearbyStatusChangeRef.current = onNearbyStatusChange;
   }, [onNearbyStatusChange]);
+
+  useEffect(() => {
+    userLocationRef.current = userLocation;
+    const layer = userLocationLayerRef.current;
+    if (layer) drawUserLocation(layer, userLocation);
+  }, [userLocation]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !userLocation || locateRequest === 0) return;
+
+    view
+      .goTo(
+        {
+          center: [userLocation.lng, userLocation.lat],
+          zoom: Math.max(view.zoom, 16),
+        },
+        { animate: true, duration: 450 }
+      )
+      .catch(() => {});
+  }, [locateRequest, userLocation]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -194,10 +253,13 @@ export function ArcgisMapCanvas({
       graphics: [...pointGraphics, ...numberGraphics],
     });
     const nearbyLayer = new GraphicsLayer();
+    const userLocationLayer = new GraphicsLayer();
+    userLocationLayerRef.current = userLocationLayer;
+    drawUserLocation(userLocationLayer, userLocationRef.current);
 
     const map = new EsriMap({
       basemap: navigationBasemap(isDark),
-      layers: [routeLayer, nearbyLayer, markerLayer],
+      layers: [routeLayer, nearbyLayer, markerLayer, userLocationLayer],
     });
 
     const first = attractions[0];
@@ -378,6 +440,7 @@ export function ArcgisMapCanvas({
       clickHandle.remove();
       nearbyHandle.remove();
       placesRequest?.abort();
+      userLocationLayerRef.current = null;
       viewRef.current = null;
       view.destroy();
     };

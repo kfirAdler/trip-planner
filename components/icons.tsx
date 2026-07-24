@@ -19,6 +19,7 @@ import {
   List,
   ChevronRight,
   LogOut,
+  Navigation,
   type LucideProps,
 } from "lucide-react";
 
@@ -47,3 +48,4 @@ export const IconCalendar = (props: LucideProps) => <CalendarDays {...defaults} 
 export const IconList = (props: LucideProps) => <List {...defaults} {...props} />;
 export const IconChevronRight = (props: LucideProps) => <ChevronRight {...defaults} {...props} />;
 export const IconLogout = (props: LucideProps) => <LogOut {...defaults} {...props} />;
+export const IconNavigation = (props: LucideProps) => <Navigation {...defaults} {...props} />;

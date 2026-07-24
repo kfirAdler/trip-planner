@@ -7,6 +7,7 @@ import {
   IconBack,
   IconChevronRight,
   IconClose,
+  IconNavigation,
   IconPin,
 } from "@/components/icons";
 import type { NearbyPlace } from "./ArcgisMapCanvas";
@@ -25,6 +26,31 @@ type MappableAttraction = {
   notes: string | null;
   photoUrl: string | null;
 };
+
+export type UserLocation = {
+  lat: number;
+  lng: number;
+  accuracy: number;
+};
+
+const LOCATION_REQUESTED_KEY = "trip-planner-location-requested";
+const LOCATION_ACCESS_KEY = "trip-planner-location-access";
+const LOCATION_CACHE_KEY = "trip-planner-last-location";
+
+function googleMapsDirectionsUrl(
+  origin: UserLocation | null,
+  destination: string
+) {
+  const params = new URLSearchParams({
+    api: "1",
+    destination,
+    dir_action: "navigate",
+  });
+  if (origin) {
+    params.set("origin", `${origin.lat},${origin.lng}`);
+  }
+  return `https://www.google.com/maps/dir/?${params.toString()}`;
+}
 
 const ArcgisMapCanvas = dynamic(
   () => import("./ArcgisMapCanvas").then((mod) => mod.ArcgisMapCanvas),
@@ -49,6 +75,8 @@ export function TripMap({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedNearby, setSelectedNearby] = useState<NearbyPlace | null>(null);
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+  const [locateRequest, setLocateRequest] = useState(0);
   const [nearbyStatus, setNearbyStatus] = useState({
     count: 0,
     loading: true,
@@ -58,6 +86,102 @@ export function TripMap({
   const selectedIndex = selected
     ? attractions.findIndex((attraction) => attraction.id === selected.id)
     : -1;
+
+  useEffect(() => {
+    if (!("geolocation" in navigator)) return;
+
+    let cancelled = false;
+    let watchId: number | null = null;
+
+    const readCachedLocation = () => {
+      try {
+        const cached = JSON.parse(
+          localStorage.getItem(LOCATION_CACHE_KEY) ?? "null"
+        ) as UserLocation | null;
+        if (
+          cached &&
+          Number.isFinite(cached.lat) &&
+          Number.isFinite(cached.lng)
+        ) {
+          setUserLocation(cached);
+        }
+      } catch {
+        localStorage.removeItem(LOCATION_CACHE_KEY);
+      }
+    };
+
+    const startWatching = () => {
+      if (cancelled) return;
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          if (cancelled) return;
+          const location = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          };
+          setUserLocation(location);
+          localStorage.setItem(LOCATION_ACCESS_KEY, "granted");
+          localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(location));
+        },
+        (error) => {
+          if (error.code === error.PERMISSION_DENIED) {
+            localStorage.setItem(LOCATION_ACCESS_KEY, "denied");
+            localStorage.removeItem(LOCATION_CACHE_KEY);
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 15000,
+          timeout: 12000,
+        }
+      );
+    };
+
+    const initializeLocation = async () => {
+      const requested = localStorage.getItem(LOCATION_REQUESTED_KEY) === "true";
+      const savedAccess = localStorage.getItem(LOCATION_ACCESS_KEY);
+
+      if (savedAccess === "granted") readCachedLocation();
+
+      if ("permissions" in navigator) {
+        try {
+          const permission = await navigator.permissions.query({
+            name: "geolocation",
+          });
+          if (cancelled) return;
+          if (permission.state === "denied") {
+            localStorage.setItem(LOCATION_ACCESS_KEY, "denied");
+            return;
+          }
+          if (permission.state === "granted") {
+            localStorage.setItem(LOCATION_ACCESS_KEY, "granted");
+            startWatching();
+            return;
+          }
+          if (permission.state === "prompt" && requested) return;
+        } catch {
+          // Safari versions without the geolocation Permissions API use the
+          // saved choice and browser-managed permission below.
+        }
+      }
+
+      if (savedAccess === "denied") return;
+      if (!("permissions" in navigator) && requested && savedAccess !== "granted") {
+        return;
+      }
+
+      localStorage.setItem(LOCATION_REQUESTED_KEY, "true");
+      startWatching();
+    };
+
+    initializeLocation();
+
+    return () => {
+      cancelled = true;
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    };
+  }, []);
 
   function selectAt(index: number) {
     const attraction = attractions[index];
@@ -73,6 +197,8 @@ export function TripMap({
         attractions={attractions}
         apiKey={apiKey}
         initialCenter={initialCenter}
+        userLocation={userLocation}
+        locateRequest={locateRequest}
         selectedId={selectedId}
         selectedNearby={selectedNearby}
         onSelect={(id) => {
@@ -93,9 +219,20 @@ export function TripMap({
             : `${nearbyStatus.count} nearby places`}
         </div>
       </div>
+      {userLocation && !selected && !selectedNearby && (
+        <button
+          type="button"
+          onClick={() => setLocateRequest((request) => request + 1)}
+          aria-label="Go to my location"
+          className="absolute right-4 bottom-[calc(env(safe-area-inset-bottom)+5rem)] z-10 flex h-14 w-14 items-center justify-center rounded-full border border-border bg-surface text-foreground shadow-xl transition-transform active:scale-95"
+        >
+          <IconNavigation size={26} fill="currentColor" />
+        </button>
+      )}
       {selected && (
         <DetailSheet
           attraction={selected}
+          userLocation={userLocation}
           canGoBack={selectedIndex > 0}
           canGoNext={selectedIndex < attractions.length - 1}
           onBack={() => selectAt(selectedIndex - 1)}
@@ -107,6 +244,7 @@ export function TripMap({
         <NearbyDetailSheet
           key={selectedNearby.placeId}
           place={selectedNearby}
+          userLocation={userLocation}
           onClose={() => setSelectedNearby(null)}
         />
       )}
@@ -116,9 +254,11 @@ export function TripMap({
 
 function NearbyDetailSheet({
   place,
+  userLocation,
   onClose,
 }: {
   place: NearbyPlace;
+  userLocation: UserLocation | null;
   onClose: () => void;
 }) {
   const [address, setAddress] = useState<string | null>(null);
@@ -162,13 +302,13 @@ function NearbyDetailSheet({
         <p className="text-xs font-light text-foreground-muted">Loading address…</p>
       )}
       <a
-        href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`}
+        href={googleMapsDirectionsUrl(userLocation, address || place.name)}
         target="_blank"
         rel="noreferrer"
         className="mt-2 flex h-10 items-center justify-center gap-2 rounded-full bg-primary text-sm font-bold text-primary-foreground"
       >
-        Get directions
-        <IconChevronRight size={16} />
+        <IconNavigation size={16} />
+        Navigate with Google Maps
       </a>
     </div>
   );
@@ -176,6 +316,7 @@ function NearbyDetailSheet({
 
 function DetailSheet({
   attraction,
+  userLocation,
   canGoBack,
   canGoNext,
   onBack,
@@ -183,6 +324,7 @@ function DetailSheet({
   onClose,
 }: {
   attraction: MappableAttraction;
+  userLocation: UserLocation | null;
   canGoBack: boolean;
   canGoNext: boolean;
   onBack: () => void;
@@ -219,25 +361,39 @@ function DetailSheet({
       {attraction.notes && (
         <p className="text-sm font-light text-foreground-muted">{attraction.notes}</p>
       )}
-      <div className="mt-2 grid grid-cols-2 gap-2 border-t border-border pt-3">
-        <button
-          type="button"
-          onClick={onBack}
-          disabled={!canGoBack}
-          className="flex h-10 items-center justify-center gap-2 rounded-full border border-border text-sm font-bold transition-colors hover:border-primary/50 hover:text-primary disabled:pointer-events-none disabled:opacity-30"
+      <div className="mt-2 flex flex-col gap-2 border-t border-border pt-3">
+        <a
+          href={googleMapsDirectionsUrl(
+            userLocation,
+            attraction.address || attraction.name
+          )}
+          target="_blank"
+          rel="noreferrer"
+          className="flex h-10 items-center justify-center gap-2 rounded-full bg-primary text-sm font-bold text-primary-foreground"
         >
-          <IconBack size={16} />
-          Back
-        </button>
-        <button
-          type="button"
-          onClick={onNext}
-          disabled={!canGoNext}
-          className="flex h-10 items-center justify-center gap-2 rounded-full bg-primary text-sm font-bold text-primary-foreground transition-opacity disabled:pointer-events-none disabled:opacity-30"
-        >
-          Next
-          <IconChevronRight size={16} />
-        </button>
+          <IconNavigation size={16} />
+          Navigate with Google Maps
+        </a>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={!canGoBack}
+            className="flex h-10 items-center justify-center gap-2 rounded-full border border-border text-sm font-bold transition-colors hover:border-primary/50 hover:text-primary disabled:pointer-events-none disabled:opacity-30"
+          >
+            <IconBack size={16} />
+            Back
+          </button>
+          <button
+            type="button"
+            onClick={onNext}
+            disabled={!canGoNext}
+            className="flex h-10 items-center justify-center gap-2 rounded-full border border-border text-sm font-bold transition-colors hover:border-primary/50 hover:text-primary disabled:pointer-events-none disabled:opacity-30"
+          >
+            Next
+            <IconChevronRight size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );
