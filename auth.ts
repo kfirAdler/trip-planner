@@ -1,15 +1,14 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 
 // Dev-only username/password login so this account can be tested without a
-// real Google OAuth round-trip. It authenticates AS the existing Google-linked
-// user (AUTH_TEST_USER_EMAIL), never creates a separate account, and is
-// entirely excluded from production builds (see the `providers` array below)
-// so it can never become a real attack surface once this is deployed.
+// real Google OAuth round-trip. It authenticates as the configured test user,
+// or the owner of the first trip when no test email is configured. It never
+// creates a separate account and is entirely excluded from production builds
+// (see the `providers` array below).
 const testCredentialsProvider = Credentials({
   id: "test-credentials",
   name: "Test login",
@@ -20,23 +19,24 @@ const testCredentialsProvider = Credentials({
   async authorize(credentials) {
     const username = credentials?.username;
     const password = credentials?.password;
-    const passwordHash = process.env.AUTH_TEST_PASSWORD_HASH;
-    const userEmail = process.env.AUTH_TEST_USER_EMAIL;
     if (
-      typeof username !== "string" ||
-      typeof password !== "string" ||
-      !passwordHash ||
-      !userEmail ||
-      username !== "kfir"
+      username !== "kfir" ||
+      password !== "kfir" ||
+      process.env.NODE_ENV === "production"
     ) {
       return null;
     }
 
-    const passwordMatches = await bcrypt.compare(password, passwordHash);
-    if (!passwordMatches) return null;
+    const testUserEmail = process.env.AUTH_TEST_USER_EMAIL;
+    if (testUserEmail) {
+      return prisma.user.findUnique({ where: { email: testUserEmail } });
+    }
 
-    const user = await prisma.user.findUnique({ where: { email: userEmail } });
-    return user;
+    const firstTrip = await prisma.trip.findFirst({
+      orderBy: { createdAt: "asc" },
+      select: { owner: true },
+    });
+    return firstTrip?.owner ?? prisma.user.findFirst();
   },
 });
 

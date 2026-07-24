@@ -1,7 +1,7 @@
 "use client";
 
 import { flushSync } from "react-dom";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CATEGORY_META } from "@/lib/categories";
 import { moveAttraction } from "../actions";
@@ -19,13 +19,15 @@ export function DayAttractionsList({
   canEdit: boolean;
 }) {
   const [items, setItems] = useState(attractions);
+  const [previousAttractions, setPreviousAttractions] = useState(attractions);
   const [movingId, setMovingId] = useState<string | null>(null);
   const itemRefs = useRef(new Map<string, HTMLDivElement>());
   const router = useRouter();
 
-  useEffect(() => {
+  if (attractions !== previousAttractions) {
+    setPreviousAttractions(attractions);
     setItems(attractions);
-  }, [attractions]);
+  }
 
   async function move(id: string, direction: "up" | "down") {
     if (movingId) return;

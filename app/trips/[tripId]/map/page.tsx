@@ -16,7 +16,11 @@ export default async function MapPage({
   const { trip } = await requireTripAccess(tripId, "VIEWER");
   const { day: rawDay } = await searchParams;
 
-  const apiKey = process.env.NEXT_PUBLIC_ARCGIS_API_KEY;
+  // Keep one ArcGIS credential for both the server-side geocoder and the
+  // browser map. This page is server-rendered, so the key is only handed to
+  // the authenticated map component instead of requiring a second public env
+  // variable.
+  const apiKey = process.env.ARCGIS_API_KEY;
   const dayCount = differenceInCalendarDays(trip.endDate, trip.startDate) + 1;
 
   const parsedDay = Number(rawDay);
@@ -37,7 +41,7 @@ export default async function MapPage({
     return (
       <EmptyState
         title="Map isn't set up yet"
-        message="Add NEXT_PUBLIC_ARCGIS_API_KEY to .env.local to see your places on a map."
+        message="Add ARCGIS_API_KEY to the app environment to see your places on a map."
       />
     );
   }

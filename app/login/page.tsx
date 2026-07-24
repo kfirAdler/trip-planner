@@ -101,9 +101,14 @@ export default async function LoginPage({
                 }}
                 className="flex w-full flex-col gap-2"
               >
+                <p className="text-center font-mono text-[0.65rem] tracking-widest text-hero-foreground/50 uppercase">
+                  Temporary local access · kfir / kfir
+                </p>
                 <input
                   name="username"
                   placeholder="Username"
+                  defaultValue="kfir"
+                  required
                   autoComplete="username"
                   className="rounded-full border border-hero-foreground/25 bg-transparent px-4 py-2.5 text-sm text-hero-foreground placeholder:text-hero-foreground/40"
                 />
@@ -111,6 +116,8 @@ export default async function LoginPage({
                   name="password"
                   type="password"
                   placeholder="Password"
+                  defaultValue="kfir"
+                  required
                   autoComplete="current-password"
                   className="rounded-full border border-hero-foreground/25 bg-transparent px-4 py-2.5 text-sm text-hero-foreground placeholder:text-hero-foreground/40"
                 />

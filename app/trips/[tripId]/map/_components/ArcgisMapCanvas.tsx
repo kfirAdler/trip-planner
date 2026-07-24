@@ -32,7 +32,10 @@ export function ArcgisMapCanvas({
   // Keep the latest callback/data available to the click handler without
   // re-running the whole setup effect (which would tear down/rebuild the map).
   const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
 
   useEffect(() => {
     if (!containerRef.current || attractions.length === 0) return;
@@ -99,8 +102,7 @@ export function ArcgisMapCanvas({
       clickHandle.remove();
       view.destroy();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiKey]);
+  }, [apiKey, attractions]);
 
   return <div ref={containerRef} className="absolute inset-0" />;
 }
