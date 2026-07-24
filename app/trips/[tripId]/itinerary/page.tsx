@@ -2,19 +2,28 @@ import Link from "next/link";
 import { addDays, differenceInCalendarDays, format } from "date-fns";
 import { requireTripAccess } from "@/lib/trip-access";
 import { prisma } from "@/lib/prisma";
-import { CATEGORY_META } from "@/lib/categories";
-import { IconMap, IconChevronDown } from "@/components/icons";
-import { AttractionRow } from "./_components/AttractionRow";
+import {
+  IconCalendar,
+  IconChevronDown,
+  IconList,
+  IconMap,
+} from "@/components/icons";
 import { AddAttractionForm } from "./_components/AddAttractionForm";
+import { CalendarItinerary } from "./_components/CalendarItinerary";
+import { DayAttractionsList } from "./_components/DayAttractionsList";
 
 export default async function ItineraryPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ tripId: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { tripId } = await params;
+  const { view } = await searchParams;
   const { trip, member } = await requireTripAccess(tripId, "VIEWER");
   const canEdit = member.role !== "VIEWER";
+  const isCalendarView = view === "calendar";
 
   const dayCount = differenceInCalendarDays(trip.endDate, trip.startDate) + 1;
 
@@ -36,92 +45,102 @@ export default async function ItineraryPage({
 
   return (
     <div className="flex flex-1 flex-col gap-8 px-6 pt-[calc(env(safe-area-inset-top)+2rem)]">
-      <h1 className="text-3xl font-bold tracking-tight">Itinerary</h1>
+      <header className="flex items-center justify-between gap-4">
+        <h1 className="text-3xl font-bold tracking-tight">Itinerary</h1>
+        <div
+          className="flex rounded-full border border-border bg-surface p-1 shadow-[var(--shadow-card)]"
+          aria-label="Itinerary view"
+        >
+          <Link
+            href={`/trips/${tripId}/itinerary`}
+            aria-label="List view"
+            aria-current={!isCalendarView ? "page" : undefined}
+            className={[
+              "flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-bold transition-colors",
+              !isCalendarView
+                ? "bg-primary text-primary-foreground"
+                : "text-foreground-muted",
+            ].join(" ")}
+          >
+            <IconList size={15} />
+            List
+          </Link>
+          <Link
+            href={`/trips/${tripId}/itinerary?view=calendar`}
+            aria-label="Calendar view"
+            aria-current={isCalendarView ? "page" : undefined}
+            className={[
+              "flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-bold transition-colors",
+              isCalendarView
+                ? "bg-primary text-primary-foreground"
+                : "text-foreground-muted",
+            ].join(" ")}
+          >
+            <IconCalendar size={15} />
+            Calendar
+          </Link>
+        </div>
+      </header>
 
-      {Array.from({ length: dayCount }).map((_, dayIndex) => {
-        const dayAttractions = byDay.get(dayIndex) ?? [];
-        const date = addDays(trip.startDate, dayIndex);
-        const hasMappable = dayAttractions.some((a) => a.lat !== null && a.lng !== null);
+      {isCalendarView ? (
+        <CalendarItinerary
+          tripId={tripId}
+          tripStart={format(trip.startDate, "yyyy-MM-dd")}
+          tripEnd={format(trip.endDate, "yyyy-MM-dd")}
+          attractions={attractions}
+          dayCount={dayCount}
+          canEdit={canEdit}
+        />
+      ) : (
+        Array.from({ length: dayCount }).map((_, dayIndex) => {
+          const dayAttractions = byDay.get(dayIndex) ?? [];
+          const date = addDays(trip.startDate, dayIndex);
+          const hasMappable = dayAttractions.some((a) => a.lat !== null && a.lng !== null);
 
-        return (
-          <details key={dayIndex} open className="group flex flex-col gap-3">
-            <summary className="flex cursor-pointer list-none items-center gap-3 select-none [&::-webkit-details-marker]:hidden">
-              <span className="font-mono text-3xl leading-none font-light tabular-nums text-foreground-muted">
-                {String(dayIndex + 1).padStart(2, "0")}
-              </span>
-              <div className="flex flex-1 flex-col leading-tight">
-                <span className="text-[0.65rem] font-bold tracking-[0.2em] text-foreground-muted uppercase">
-                  Day
+          return (
+            <details key={dayIndex} open className="group flex flex-col gap-3">
+              <summary className="flex cursor-pointer list-none items-center gap-3 select-none [&::-webkit-details-marker]:hidden">
+                <span className="font-mono text-3xl leading-none font-light tabular-nums text-foreground-muted">
+                  {String(dayIndex + 1).padStart(2, "0")}
                 </span>
-                <span className="text-lg font-bold">
-                  {format(date, "EEE, MMM d")}
-                </span>
-              </div>
-              {hasMappable && (
-                <Link
-                  href={`/trips/${tripId}/map?day=${dayIndex + 1}`}
-                  aria-label={`View day ${dayIndex + 1} on map`}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-primary"
-                >
-                  <IconMap size={16} />
-                </Link>
-              )}
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-foreground-muted transition-transform duration-200 group-open:rotate-180">
-                <IconChevronDown size={16} />
-              </span>
-            </summary>
-
-            {dayAttractions.length === 0 ? (
-              <p className="pl-1 text-sm font-light text-foreground-muted">
-                Nothing planned yet.
-              </p>
-            ) : (
-              <div className="relative flex flex-col gap-3">
-                {dayAttractions.length > 1 && (
-                  <div
-                    aria-hidden
-                    className="absolute top-3 bottom-3 left-[15px] w-px bg-border"
-                  />
+                <div className="flex flex-1 flex-col leading-tight">
+                  <span className="text-[0.65rem] font-bold tracking-[0.2em] text-foreground-muted uppercase">
+                    Day
+                  </span>
+                  <span className="text-lg font-bold">
+                    {format(date, "EEE, MMM d")}
+                  </span>
+                </div>
+                {hasMappable && (
+                  <Link
+                    href={`/trips/${tripId}/map?day=${dayIndex + 1}`}
+                    aria-label={`View day ${dayIndex + 1} on map`}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-primary"
+                  >
+                    <IconMap size={16} />
+                  </Link>
                 )}
-                {dayAttractions.map((attraction, i) => {
-                  const meta = CATEGORY_META[attraction.category];
-                  const isTerminus = attraction.category === "LODGING";
-                  return (
-                    <div key={attraction.id} className="relative flex gap-3">
-                      <div className="relative z-10 flex w-[30px] shrink-0 justify-center pt-3.5">
-                        <span
-                          className={
-                            isTerminus
-                              ? "h-4 w-4 shrink-0 rounded-full ring-[3px] ring-background"
-                              : "h-3 w-3 shrink-0 rounded-full ring-[3px] ring-background"
-                          }
-                          style={{ background: meta.color }}
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <AttractionRow
-                          tripId={tripId}
-                          attraction={attraction}
-                          dayCount={dayCount}
-                          canEdit={canEdit}
-                          isFirst={i === 0}
-                          isLast={i === dayAttractions.length - 1}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-foreground-muted transition-transform duration-200 group-open:rotate-180">
+                  <IconChevronDown size={16} />
+                </span>
+              </summary>
 
-            {canEdit && (
-              <div className="pl-[38px]">
-                <AddAttractionForm tripId={tripId} dayIndex={dayIndex} />
-              </div>
-            )}
-          </details>
-        );
-      })}
+              <DayAttractionsList
+                tripId={tripId}
+                attractions={dayAttractions}
+                dayCount={dayCount}
+                canEdit={canEdit}
+              />
+
+              {canEdit && (
+                <div className="pl-[38px]">
+                  <AddAttractionForm tripId={tripId} dayIndex={dayIndex} />
+                </div>
+              )}
+            </details>
+          );
+        })
+      )}
     </div>
   );
 }

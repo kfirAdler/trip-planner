@@ -17,7 +17,7 @@ import {
   IconMoveDown,
 } from "@/components/icons";
 
-type Attraction = {
+export type Attraction = {
   id: string;
   name: string;
   category: (typeof CATEGORIES)[number];
@@ -39,6 +39,8 @@ export function AttractionRow({
   showDay = false,
   isFirst,
   isLast,
+  onMove,
+  isMoving = false,
 }: {
   tripId: string;
   attraction: Attraction;
@@ -48,6 +50,8 @@ export function AttractionRow({
   showDay?: boolean;
   isFirst: boolean;
   isLast: boolean;
+  onMove?: (direction: "up" | "down") => void;
+  isMoving?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const meta = CATEGORY_META[attraction.category];
@@ -214,26 +218,51 @@ export function AttractionRow({
           <div className="mt-2 flex items-center gap-1.5">
             {canReorder && (
               <>
-                <form action={moveUp}>
-                  <button
-                    type="submit"
-                    disabled={isFirst}
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-border disabled:opacity-30"
-                    aria-label="Move up"
-                  >
-                    <IconMoveUp size={14} />
-                  </button>
-                </form>
-                <form action={moveDown}>
-                  <button
-                    type="submit"
-                    disabled={isLast}
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-border disabled:opacity-30"
-                    aria-label="Move down"
-                  >
-                    <IconMoveDown size={14} />
-                  </button>
-                </form>
+                {onMove ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onMove("up")}
+                      disabled={isFirst || isMoving}
+                      className="flex h-7 w-7 items-center justify-center rounded-full border border-border transition-colors disabled:opacity-30"
+                      aria-label="Move up"
+                    >
+                      <IconMoveUp size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onMove("down")}
+                      disabled={isLast || isMoving}
+                      className="flex h-7 w-7 items-center justify-center rounded-full border border-border transition-colors disabled:opacity-30"
+                      aria-label="Move down"
+                    >
+                      <IconMoveDown size={14} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <form action={moveUp}>
+                      <button
+                        type="submit"
+                        disabled={isFirst}
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-border disabled:opacity-30"
+                        aria-label="Move up"
+                      >
+                        <IconMoveUp size={14} />
+                      </button>
+                    </form>
+                    <form action={moveDown}>
+                      <button
+                        type="submit"
+                        disabled={isLast}
+                        className="flex h-7 w-7 items-center justify-center rounded-full border border-border disabled:opacity-30"
+                        aria-label="Move down"
+                      >
+                        <IconMoveDown size={14} />
+                      </button>
+                    </form>
+                  </>
+                )}
               </>
             )}
             <button

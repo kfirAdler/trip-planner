@@ -2,8 +2,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { format } from "date-fns";
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { auth, signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { IconLogout } from "@/components/icons";
 
 export default async function TripsPage() {
   const session = await auth();
@@ -17,11 +18,27 @@ export default async function TripsPage() {
 
   return (
     <div className="flex flex-1 flex-col pb-28">
-      <header className="px-6 pt-[calc(env(safe-area-inset-top)+2rem)] pb-4">
-        <span className="text-sm font-light tracking-[0.3em] text-foreground-muted uppercase">
-          Welcome{session.user.name ? `, ${session.user.name.split(" ")[0]}` : ""}
-        </span>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight">My Trips</h1>
+      <header className="flex items-end justify-between gap-4 px-6 pt-[calc(env(safe-area-inset-top)+2rem)] pb-4">
+        <div>
+          <span className="text-sm font-light tracking-[0.3em] text-foreground-muted uppercase">
+            Welcome{session.user.name ? `, ${session.user.name.split(" ")[0]}` : ""}
+          </span>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight">My Trips</h1>
+        </div>
+        <form
+          action={async () => {
+            "use server";
+            await signOut({ redirectTo: "/login" });
+          }}
+        >
+          <button
+            type="submit"
+            className="pressable mb-0.5 flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-2 text-xs font-bold text-foreground-muted shadow-[var(--shadow-card)]"
+          >
+            <IconLogout size={15} />
+            Log out
+          </button>
+        </form>
       </header>
 
       <div className="flex flex-1 flex-col gap-4 px-6">
