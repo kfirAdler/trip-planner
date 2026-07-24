@@ -49,6 +49,7 @@ async function suggestAddresses(
     bias ? `${bias.lng},${bias.lat}` : JAPAN_BIAS_LOCATION
   );
   url.searchParams.set("countryCode", "JPN");
+  url.searchParams.set("category", "Address");
   url.searchParams.set("maxSuggestions", "8");
 
   const res = await fetch(url, { cache: "no-store" });
@@ -63,7 +64,7 @@ async function suggestAddresses(
       id: `geocode:${s.magicKey}`,
       source: "geocode" as const,
       text: s.text,
-      subtitle: "Address or landmark",
+      subtitle: "Address",
       magicKey: s.magicKey,
     }));
 }
@@ -134,19 +135,15 @@ async function suggestBusinesses(
 export async function suggestPlaces(
   query: string,
   bias?: PlaceSearchBias,
-  addressesFirst = false
+  field: "name" | "address" = "name"
 ): Promise<PlaceSuggestion[]> {
-  const [businesses, addresses] = await Promise.all([
-    suggestBusinesses(query, bias),
-    suggestAddresses(query, bias),
-  ]);
-
-  const combined = addressesFirst
-    ? [...addresses, ...businesses]
-    : [...businesses, ...addresses];
+  const suggestions =
+    field === "address"
+      ? await suggestAddresses(query, bias)
+      : await suggestBusinesses(query, bias);
   const seen = new Set<string>();
 
-  return combined
+  return suggestions
     .filter((suggestion) => {
       const key = suggestion.text.trim().toLocaleLowerCase();
       if (seen.has(key)) return false;
@@ -170,6 +167,7 @@ export async function resolveGeocodedPlace(
   url.searchParams.set("singleLine", text);
   url.searchParams.set("magicKey", magicKey);
   url.searchParams.set("countryCode", "JPN");
+  url.searchParams.set("category", "Address");
   url.searchParams.set(
     "location",
     bias ? `${bias.lng},${bias.lat}` : JAPAN_BIAS_LOCATION

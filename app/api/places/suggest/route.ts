@@ -30,12 +30,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ suggestions: [] });
   }
 
-  const addressesFirst =
-    request.nextUrl.searchParams.get("field") === "address";
+  const field =
+    request.nextUrl.searchParams.get("field") === "address"
+      ? "address"
+      : "name";
   const suggestions = await suggestPlaces(
     query,
     readBias(request),
-    addressesFirst
+    field
   );
   return NextResponse.json({ suggestions });
 }
