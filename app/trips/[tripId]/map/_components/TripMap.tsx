@@ -77,11 +77,6 @@ export function TripMap({
   const [selectedNearby, setSelectedNearby] = useState<NearbyPlace | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locateRequest, setLocateRequest] = useState(0);
-  const [nearbyStatus, setNearbyStatus] = useState({
-    count: 0,
-    loading: true,
-    zoomIn: false,
-  });
   const byId = useMemo(() => new Map(attractions.map((a) => [a.id, a])), [attractions]);
   const selected = selectedId ? byId.get(selectedId) : null;
   const selectedIndex = selected
@@ -210,18 +205,7 @@ export function TripMap({
           if (place) setSelectedId(null);
           setSelectedNearby(place);
         }}
-        onNearbyStatusChange={setNearbyStatus}
       />
-      <div className="pointer-events-none absolute top-[calc(env(safe-area-inset-top)+4rem)] left-3 z-10">
-        <div className="flex h-9 items-center gap-2 rounded-full border border-border bg-surface/90 px-3 text-xs font-bold text-foreground shadow-md backdrop-blur">
-          <IconPin size={14} className="text-primary" />
-          {nearbyStatus.zoomIn
-            ? "Zoom in to explore places"
-            : nearbyStatus.loading
-              ? "Finding places in view…"
-              : `${nearbyStatus.count} places in view`}
-        </div>
-      </div>
       {userLocation && !selected && !selectedNearby && (
         <button
           type="button"

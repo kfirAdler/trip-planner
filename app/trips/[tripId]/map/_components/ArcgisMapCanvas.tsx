@@ -12,11 +12,13 @@ import Point from "@arcgis/core/geometry/Point.js";
 import Polyline from "@arcgis/core/geometry/Polyline.js";
 import SimpleMarkerSymbol from "@arcgis/core/symbols/SimpleMarkerSymbol.js";
 import SimpleLineSymbol from "@arcgis/core/symbols/SimpleLineSymbol.js";
+import CIMSymbol from "@arcgis/core/symbols/CIMSymbol.js";
 import PictureMarkerSymbol from "@arcgis/core/symbols/PictureMarkerSymbol.js";
 import TextSymbol from "@arcgis/core/symbols/TextSymbol.js";
 import { queryPlacesWithinExtent } from "@arcgis/core/rest/places.js";
 import PlacesQueryParameters from "@arcgis/core/rest/support/PlacesQueryParameters.js";
 import type PlaceResult from "@arcgis/core/rest/support/PlaceResult.js";
+import type { CIMSymbolReference } from "@arcgis/core/symbols/cim/types.js";
 import "@arcgis/core/assets/esri/themes/light/main.css";
 import { CATEGORY_META } from "@/lib/categories";
 import type { UserLocation } from "./TripMap";
@@ -99,7 +101,6 @@ export function ArcgisMapCanvas({
   selectedNearby,
   onSelect,
   onNearbySelect,
-  onNearbyStatusChange,
 }: {
   attractions: MappableAttraction[];
   apiKey: string;
@@ -110,11 +111,6 @@ export function ArcgisMapCanvas({
   selectedNearby: NearbyPlace | null;
   onSelect: (id: string | null) => void;
   onNearbySelect: (place: NearbyPlace | null) => void;
-  onNearbyStatusChange: (status: {
-    count: number;
-    loading: boolean;
-    zoomIn: boolean;
-  }) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<MapView | null>(null);
@@ -124,7 +120,6 @@ export function ArcgisMapCanvas({
   // re-running the whole setup effect (which would tear down/rebuild the map).
   const onSelectRef = useRef(onSelect);
   const onNearbySelectRef = useRef(onNearbySelect);
-  const onNearbyStatusChangeRef = useRef(onNearbyStatusChange);
 
   useEffect(() => {
     onSelectRef.current = onSelect;
@@ -133,10 +128,6 @@ export function ArcgisMapCanvas({
   useEffect(() => {
     onNearbySelectRef.current = onNearbySelect;
   }, [onNearbySelect]);
-
-  useEffect(() => {
-    onNearbyStatusChangeRef.current = onNearbyStatusChange;
-  }, [onNearbyStatusChange]);
 
   useEffect(() => {
     userLocationRef.current = userLocation;
@@ -341,6 +332,34 @@ export function ArcgisMapCanvas({
 
     let placesRequest: AbortController | null = null;
     let lastPlacesExtentKey = "";
+    const cimSymbolCache = new Map<string, Promise<CIMSymbol>>();
+
+    const loadCimSymbol = (url: string, signal: AbortSignal) => {
+      const cached = cimSymbolCache.get(url);
+      if (cached) return cached.then((symbol) => symbol.clone());
+
+      const pending = fetch(url, { signal })
+        .then((response) => {
+          if (!response.ok) throw new Error("Place symbol could not be loaded");
+          return response.json() as Promise<CIMSymbolReference["symbol"]>;
+        })
+        .then(
+          (symbol) =>
+            new CIMSymbol({
+              data: {
+                type: "CIMSymbolReference",
+                symbol,
+              },
+            })
+        )
+        .catch((error) => {
+          cimSymbolCache.delete(url);
+          throw error;
+        });
+      cimSymbolCache.set(url, pending);
+      return pending.then((symbol) => symbol.clone());
+    };
+
     const nearbyHandle = reactiveUtils.watch(
       () => view.stationary,
       async (stationary) => {
@@ -367,19 +386,8 @@ export function ArcgisMapCanvas({
         // labels at wider scales; interactive results resume after zooming in.
         if (visibleExtent.width >= 19500 || visibleExtent.height >= 19500) {
           nearbyLayer.removeAll();
-          onNearbyStatusChangeRef.current({
-            count: 0,
-            loading: false,
-            zoomIn: true,
-          });
           return;
         }
-
-        onNearbyStatusChangeRef.current({
-          count: nearbyLayer.graphics.length,
-          loading: true,
-          zoomIn: false,
-        });
 
         try {
           const places: PlaceResult[] = [];
@@ -387,7 +395,7 @@ export function ArcgisMapCanvas({
             apiKey,
             extent: visibleExtent,
             pageSize: 20,
-            icon: "svg",
+            icon: "cim",
           });
 
           while (query && places.length < 200) {
@@ -402,51 +410,51 @@ export function ArcgisMapCanvas({
           const uniquePlaces = Array.from(
             new Map(places.map((place) => [place.placeId, place])).values()
           );
-          const graphics = uniquePlaces.map((place) => {
-            const category = place.categories[0]?.label ?? "Place";
-            const attributes = {
-              kind: "nearby",
-              placeId: place.placeId,
-              name: place.name,
-              category,
-              lat: place.location.latitude,
-              lng: place.location.longitude,
-            };
-            const point = new Point({
-              longitude: place.location.longitude,
-              latitude: place.location.latitude,
-            });
+          const graphics = await Promise.all(
+            uniquePlaces.map(async (place) => {
+              const category = place.categories[0]?.label ?? "Place";
+              const attributes = {
+                kind: "nearby",
+                placeId: place.placeId,
+                name: place.name,
+                category,
+                lat: place.location.latitude,
+                lng: place.location.longitude,
+              };
+              const point = new Point({
+                longitude: place.location.longitude,
+                latitude: place.location.latitude,
+              });
+              const fallbackSymbol = () =>
+                new PictureMarkerSymbol({
+                  url: "https://static.arcgis.com/icons/places/Default_Shop_or_Service_15.svg",
+                  width: 18,
+                  height: 18,
+                });
+              const symbol = place.icon?.url
+                ? await loadCimSymbol(place.icon.url, request.signal).catch(
+                    (error) => {
+                      if ((error as Error).name === "AbortError") throw error;
+                      return fallbackSymbol();
+                    }
+                  )
+                : fallbackSymbol();
 
-            return new Graphic({
-              geometry: point,
-              symbol: new PictureMarkerSymbol({
-                url:
-                  place.icon?.url ??
-                  "https://static.arcgis.com/icons/places/Default_Shop_or_Service_15.svg",
-                width: 18,
-                height: 18,
-              }),
-              attributes,
-            });
-          });
+              return new Graphic({
+                geometry: point,
+                symbol,
+                attributes,
+              });
+            })
+          );
+          if (request !== placesRequest) return;
 
           nearbyLayer.removeAll();
           nearbyLayer.addMany(graphics);
-          onNearbyStatusChangeRef.current({
-            count: uniquePlaces.length,
-            loading: false,
-            zoomIn: false,
-          });
         } catch (error) {
           if (request !== placesRequest) return;
           lastPlacesExtentKey = "";
-          if ((error as Error).name !== "AbortError") {
-            onNearbyStatusChangeRef.current({
-              count: nearbyLayer.graphics.length,
-              loading: false,
-              zoomIn: false,
-            });
-          }
+          if ((error as Error).name === "AbortError") return;
         }
       },
       { initial: true }
