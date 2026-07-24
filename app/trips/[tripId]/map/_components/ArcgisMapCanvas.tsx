@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import esriConfig from "@arcgis/core/config.js";
+import * as reactiveUtils from "@arcgis/core/core/reactiveUtils.js";
 import EsriMap from "@arcgis/core/Map.js";
 import Basemap from "@arcgis/core/Basemap.js";
 import MapView from "@arcgis/core/views/MapView.js";
@@ -11,7 +12,10 @@ import Point from "@arcgis/core/geometry/Point.js";
 import Polyline from "@arcgis/core/geometry/Polyline.js";
 import SimpleMarkerSymbol from "@arcgis/core/symbols/SimpleMarkerSymbol.js";
 import SimpleLineSymbol from "@arcgis/core/symbols/SimpleLineSymbol.js";
+import PictureMarkerSymbol from "@arcgis/core/symbols/PictureMarkerSymbol.js";
 import TextSymbol from "@arcgis/core/symbols/TextSymbol.js";
+import { queryPlacesNearPoint } from "@arcgis/core/rest/places.js";
+import PlacesQueryParameters from "@arcgis/core/rest/support/PlacesQueryParameters.js";
 import "@arcgis/core/assets/esri/themes/light/main.css";
 import { CATEGORY_META } from "@/lib/categories";
 import type { Category } from "@/app/generated/prisma/client";
@@ -21,6 +25,14 @@ type MappableAttraction = {
   category: Category;
   dayIndex: number | null;
   routeOrder: number;
+  lat: number;
+  lng: number;
+};
+
+export type NearbyPlace = {
+  placeId: string;
+  name: string;
+  category: string;
   lat: number;
   lng: number;
 };
@@ -47,51 +59,70 @@ function routeLineSymbol(isDark: boolean) {
 export function ArcgisMapCanvas({
   attractions,
   apiKey,
+  initialCenter,
   selectedId,
+  selectedNearby,
   onSelect,
+  onNearbySelect,
+  onNearbyStatusChange,
 }: {
   attractions: MappableAttraction[];
   apiKey: string;
+  initialCenter?: { lat: number; lng: number };
   selectedId: string | null;
+  selectedNearby: NearbyPlace | null;
   onSelect: (id: string | null) => void;
+  onNearbySelect: (place: NearbyPlace | null) => void;
+  onNearbyStatusChange: (status: { count: number; loading: boolean }) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<MapView | null>(null);
   // Keep the latest callback/data available to the click handler without
   // re-running the whole setup effect (which would tear down/rebuild the map).
   const onSelectRef = useRef(onSelect);
+  const onNearbySelectRef = useRef(onNearbySelect);
+  const onNearbyStatusChangeRef = useRef(onNearbyStatusChange);
 
   useEffect(() => {
     onSelectRef.current = onSelect;
   }, [onSelect]);
 
   useEffect(() => {
+    onNearbySelectRef.current = onNearbySelect;
+  }, [onNearbySelect]);
+
+  useEffect(() => {
+    onNearbyStatusChangeRef.current = onNearbyStatusChange;
+  }, [onNearbyStatusChange]);
+
+  useEffect(() => {
     const view = viewRef.current;
     const selected = attractions.find((attraction) => attraction.id === selectedId);
+    const target = selected ?? selectedNearby;
     if (!view) return;
 
     view.padding = {
       top: 0,
       right: 0,
-      bottom: selected ? 260 : 80,
+      bottom: target ? 260 : 80,
       left: 0,
     };
 
-    if (!selected) return;
+    if (!target) return;
 
     view
       .goTo(
         {
-          center: [selected.lng, selected.lat],
+          center: [target.lng, target.lat],
           zoom: Math.max(view.zoom, 14),
         },
         { animate: true, duration: 450 }
       )
       .catch(() => {});
-  }, [attractions, selectedId]);
+  }, [attractions, selectedId, selectedNearby]);
 
   useEffect(() => {
-    if (!containerRef.current || attractions.length === 0) return;
+    if (!containerRef.current) return;
 
     esriConfig.apiKey = apiKey;
 
@@ -135,7 +166,7 @@ export function ArcgisMapCanvas({
             size: 24,
             outline: { color: "#ffffff", width: 2 },
           }),
-          attributes: { id: attraction.id },
+          attributes: { id: attraction.id, kind: "itinerary" },
         });
       });
     const numberGraphics = attractions.map(
@@ -156,23 +187,25 @@ export function ArcgisMapCanvas({
               weight: "bold",
             },
           }),
-          attributes: { id: attraction.id },
+          attributes: { id: attraction.id, kind: "itinerary" },
         })
     );
     const markerLayer = new GraphicsLayer({
       graphics: [...pointGraphics, ...numberGraphics],
     });
+    const nearbyLayer = new GraphicsLayer();
 
     const map = new EsriMap({
       basemap: navigationBasemap(isDark),
-      layers: [routeLayer, markerLayer],
+      layers: [routeLayer, nearbyLayer, markerLayer],
     });
 
     const first = attractions[0];
+    const startingPoint = first ?? initialCenter ?? { lat: 35.6812, lng: 139.7671 };
     const view = new MapView({
       container: containerRef.current,
       map,
-      center: [first.lng, first.lat],
+      center: [startingPoint.lng, startingPoint.lat],
       zoom: 12,
       popupEnabled: false,
       // Hides zoom/compass/nav-toggle widgets (pinch-to-zoom is native on
@@ -206,13 +239,130 @@ export function ArcgisMapCanvas({
     systemTheme.addEventListener("change", handleSystemThemeChange);
 
     const clickHandle = view.on("click", async (event) => {
-      const { results } = await view.hitTest(event, { include: markerLayer });
-      const hit = results.find(
+      const { results } = await view.hitTest(event, {
+        include: [markerLayer, nearbyLayer],
+      });
+      const itineraryHit = results.find(
+        (r): r is typeof r & { type: "graphic" } =>
+          r.type === "graphic" && r.graphic.attributes?.kind === "itinerary"
+      );
+      if (itineraryHit) {
+        onNearbySelectRef.current(null);
+        onSelectRef.current(itineraryHit.graphic.attributes.id);
+        return;
+      }
+
+      const nearbyHit = results.find(
         (r): r is typeof r & { type: "graphic" } => r.type === "graphic"
       );
-      const id = hit?.graphic.attributes?.id ?? null;
-      onSelectRef.current(id);
+      if (nearbyHit?.graphic.attributes?.kind === "nearby") {
+        const attributes = nearbyHit.graphic.attributes;
+        onSelectRef.current(null);
+        onNearbySelectRef.current({
+          placeId: attributes.placeId,
+          name: attributes.name,
+          category: attributes.category,
+          lat: attributes.lat,
+          lng: attributes.lng,
+        });
+        return;
+      }
+
+      onSelectRef.current(null);
+      onNearbySelectRef.current(null);
     });
+
+    let placesRequest: AbortController | null = null;
+    const nearbyHandle = reactiveUtils.watch(
+      () => view.stationary,
+      async (stationary) => {
+        if (!stationary || !view.center) return;
+
+        placesRequest?.abort();
+        const request = new AbortController();
+        placesRequest = request;
+        onNearbyStatusChangeRef.current({
+          count: nearbyLayer.graphics.length / 2,
+          loading: true,
+        });
+
+        try {
+          const result = await queryPlacesNearPoint(
+            new PlacesQueryParameters({
+              apiKey,
+              point: view.center,
+              radius: Math.min(
+                10000,
+                Math.max(500, Math.round(view.scale / 12))
+              ),
+              pageSize: 20,
+              icon: "svg",
+            }),
+            { signal: request.signal }
+          );
+          if (request !== placesRequest) return;
+
+          const graphics = result.results.flatMap((place) => {
+            const category = place.categories[0]?.label ?? "Place";
+            const attributes = {
+              kind: "nearby",
+              placeId: place.placeId,
+              name: place.name,
+              category,
+              lat: place.location.latitude,
+              lng: place.location.longitude,
+            };
+            const point = new Point({
+              longitude: place.location.longitude,
+              latitude: place.location.latitude,
+            });
+
+            return [
+              new Graphic({
+                geometry: point,
+                symbol: new SimpleMarkerSymbol({
+                  color: [255, 255, 255, 0.95],
+                  size: 22,
+                  outline: { color: [23, 38, 61, 0.32], width: 1 },
+                }),
+                attributes,
+              }),
+              new Graphic({
+                geometry: point,
+                symbol: place.icon?.url
+                  ? new PictureMarkerSymbol({
+                      url: place.icon.url,
+                      width: 16,
+                      height: 16,
+                    })
+                  : new SimpleMarkerSymbol({
+                      color: [82, 103, 126, 0.9],
+                      size: 8,
+                      outline: { color: "#ffffff", width: 1 },
+                    }),
+                attributes,
+              }),
+            ];
+          });
+
+          nearbyLayer.removeAll();
+          nearbyLayer.addMany(graphics);
+          onNearbyStatusChangeRef.current({
+            count: result.results.length,
+            loading: false,
+          });
+        } catch (error) {
+          if (request !== placesRequest) return;
+          if ((error as Error).name !== "AbortError") {
+            onNearbyStatusChangeRef.current({
+              count: nearbyLayer.graphics.length / 2,
+              loading: false,
+            });
+          }
+        }
+      },
+      { initial: true }
+    );
 
     view
       .when(() => {
@@ -226,10 +376,12 @@ export function ArcgisMapCanvas({
       window.removeEventListener("app-theme-change", handleThemeChange);
       systemTheme.removeEventListener("change", handleSystemThemeChange);
       clickHandle.remove();
+      nearbyHandle.remove();
+      placesRequest?.abort();
       viewRef.current = null;
       view.destroy();
     };
-  }, [apiKey, attractions]);
+  }, [apiKey, attractions, initialCenter]);
 
   return <div ref={containerRef} className="absolute inset-0" />;
 }

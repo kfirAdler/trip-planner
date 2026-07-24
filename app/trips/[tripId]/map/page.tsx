@@ -47,27 +47,15 @@ export default async function MapPage({
       ...attraction,
       routeOrder: index + 1,
     }));
+  const initialLocation = ordered.find(
+    (attraction) => attraction.lat !== null && attraction.lng !== null
+  );
 
   if (!apiKey) {
     return (
       <EmptyState
         title="Map isn't set up yet"
         message="Add ARCGIS_API_KEY to the app environment to see your places on a map."
-      />
-    );
-  }
-
-  if (mappable.length === 0) {
-    return (
-      <EmptyState
-        title={dayIndex === null ? "No places on the map yet" : `Nothing on Day ${dayIndex + 1} has a location yet`}
-        message={
-          all.length === 0
-            ? "Add places from the itinerary page to see them here."
-            : "Add a latitude/longitude to your places (from the itinerary page) to plot them here."
-        }
-        dayIndex={dayIndex}
-        tripId={tripId}
       />
     );
   }
@@ -86,7 +74,17 @@ export default async function MapPage({
           </Link>
         </div>
       )}
-      <TripMap attractions={mappable} apiKey={apiKey} />
+      <TripMap
+        attractions={mappable}
+        apiKey={apiKey}
+        initialCenter={
+          initialLocation?.lat !== null &&
+          initialLocation?.lat !== undefined &&
+          initialLocation.lng !== null
+            ? { lat: initialLocation.lat, lng: initialLocation.lng }
+            : undefined
+        }
+      />
     </div>
   );
 }

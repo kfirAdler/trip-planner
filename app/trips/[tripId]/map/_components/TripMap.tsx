@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { CATEGORY_META } from "@/lib/categories";
 import {
   IconBack,
   IconChevronRight,
   IconClose,
+  IconPin,
 } from "@/components/icons";
+import type { NearbyPlace } from "./ArcgisMapCanvas";
 import type { Category } from "@/app/generated/prisma/client";
 
 type MappableAttraction = {
@@ -39,11 +41,18 @@ const ArcgisMapCanvas = dynamic(
 export function TripMap({
   attractions,
   apiKey,
+  initialCenter,
 }: {
   attractions: MappableAttraction[];
   apiKey: string;
+  initialCenter?: { lat: number; lng: number };
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedNearby, setSelectedNearby] = useState<NearbyPlace | null>(null);
+  const [nearbyStatus, setNearbyStatus] = useState({
+    count: 0,
+    loading: true,
+  });
   const byId = useMemo(() => new Map(attractions.map((a) => [a.id, a])), [attractions]);
   const selected = selectedId ? byId.get(selectedId) : null;
   const selectedIndex = selected
@@ -52,7 +61,10 @@ export function TripMap({
 
   function selectAt(index: number) {
     const attraction = attractions[index];
-    if (attraction) setSelectedId(attraction.id);
+    if (attraction) {
+      setSelectedNearby(null);
+      setSelectedId(attraction.id);
+    }
   }
 
   return (
@@ -60,9 +72,27 @@ export function TripMap({
       <ArcgisMapCanvas
         attractions={attractions}
         apiKey={apiKey}
+        initialCenter={initialCenter}
         selectedId={selectedId}
-        onSelect={setSelectedId}
+        selectedNearby={selectedNearby}
+        onSelect={(id) => {
+          if (id) setSelectedNearby(null);
+          setSelectedId(id);
+        }}
+        onNearbySelect={(place) => {
+          if (place) setSelectedId(null);
+          setSelectedNearby(place);
+        }}
+        onNearbyStatusChange={setNearbyStatus}
       />
+      <div className="pointer-events-none absolute top-[calc(env(safe-area-inset-top)+4rem)] left-3 z-10">
+        <div className="flex h-9 items-center gap-2 rounded-full border border-border bg-surface/90 px-3 text-xs font-bold text-foreground shadow-md backdrop-blur">
+          <IconPin size={14} className="text-primary" />
+          {nearbyStatus.loading
+            ? "Finding nearby…"
+            : `${nearbyStatus.count} nearby places`}
+        </div>
+      </div>
       {selected && (
         <DetailSheet
           attraction={selected}
@@ -73,6 +103,73 @@ export function TripMap({
           onClose={() => setSelectedId(null)}
         />
       )}
+      {selectedNearby && (
+        <NearbyDetailSheet
+          key={selectedNearby.placeId}
+          place={selectedNearby}
+          onClose={() => setSelectedNearby(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function NearbyDetailSheet({
+  place,
+  onClose,
+}: {
+  place: NearbyPlace;
+  onClose: () => void;
+}) {
+  const [address, setAddress] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch(`/api/places/resolve?placeId=${encodeURIComponent(place.placeId)}`, {
+      signal: controller.signal,
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((result) => setAddress(result?.address || null))
+      .catch(() => {});
+
+    return () => controller.abort();
+  }, [place.placeId]);
+
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-2 rounded-t-3xl border-t border-border bg-surface p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] shadow-2xl">
+      <div className="mx-auto -mt-1.5 mb-1 h-1 w-9 rounded-full bg-border" aria-hidden />
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="flex items-center gap-1.5 text-xs font-bold text-foreground-muted">
+            <IconPin size={13} className="text-primary" />
+            Nearby place · {place.category}
+          </p>
+          <p className="mt-0.5 text-lg font-bold leading-tight">{place.name}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border"
+          aria-label="Close"
+        >
+          <IconClose size={16} />
+        </button>
+      </div>
+      {address ? (
+        <p className="text-sm font-light text-foreground-muted">{address}</p>
+      ) : (
+        <p className="text-xs font-light text-foreground-muted">Loading address…</p>
+      )}
+      <a
+        href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-2 flex h-10 items-center justify-center gap-2 rounded-full bg-primary text-sm font-bold text-primary-foreground"
+      >
+        Get directions
+        <IconChevronRight size={16} />
+      </a>
     </div>
   );
 }
