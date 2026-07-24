@@ -30,6 +30,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ suggestions: [] });
   }
 
-  const suggestions = await suggestPlaces(query, readBias(request));
+  const addressesFirst =
+    request.nextUrl.searchParams.get("field") === "address";
+  const suggestions = await suggestPlaces(
+    query,
+    readBias(request),
+    addressesFirst
+  );
   return NextResponse.json({ suggestions });
 }

@@ -2,7 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type Suggestion = { text: string; magicKey: string };
+type Suggestion =
+  | {
+      id: string;
+      source: "geocode";
+      text: string;
+      subtitle: string;
+      magicKey: string;
+    }
+  | {
+      id: string;
+      source: "places";
+      text: string;
+      subtitle: string;
+      placeId: string;
+    };
 type SearchField = "name" | "address";
 
 export type PlaceSearchBias = {
@@ -72,7 +86,7 @@ export function PlaceAutocomplete({
       const requestId = ++requestIdRef.current;
       try {
         const response = await fetch(
-          `/api/places/suggest?q=${encodeURIComponent(value)}${biasParams()}`
+          `/api/places/suggest?q=${encodeURIComponent(value)}&field=${field}${biasParams()}`
         );
         if (!response.ok) return;
         const data = await response.json();
@@ -89,12 +103,16 @@ export function PlaceAutocomplete({
     setActiveField(null);
     setSuggestions([]);
     setName(suggestion.text.split(",")[0]);
-    setAddress(suggestion.text);
+    setAddress(suggestion.source === "geocode" ? suggestion.text : "");
     setIsResolving(true);
 
     try {
+      const resolutionParams =
+        suggestion.source === "places"
+          ? `placeId=${encodeURIComponent(suggestion.placeId)}`
+          : `text=${encodeURIComponent(suggestion.text)}&magicKey=${encodeURIComponent(suggestion.magicKey)}${biasParams()}`;
       const response = await fetch(
-        `/api/places/resolve?text=${encodeURIComponent(suggestion.text)}&magicKey=${encodeURIComponent(suggestion.magicKey)}${biasParams()}`
+        `/api/places/resolve?${resolutionParams}`
       );
       if (!response.ok) return;
 
@@ -116,13 +134,16 @@ export function PlaceAutocomplete({
     return (
       <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-border bg-surface shadow-lg">
         {suggestions.map((suggestion) => (
-          <li key={suggestion.magicKey}>
+          <li key={suggestion.id}>
             <button
               type="button"
               onClick={() => handleSelect(suggestion)}
-              className="block w-full px-3 py-2 text-left text-sm active:bg-surface-muted"
+              className="flex w-full flex-col px-3 py-2 text-left active:bg-surface-muted"
             >
-              {suggestion.text}
+              <span className="text-sm font-bold">{suggestion.text}</span>
+              <span className="text-xs font-light text-foreground-muted">
+                {suggestion.subtitle}
+              </span>
             </button>
           </li>
         ))}

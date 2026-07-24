@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { resolvePlace } from "@/lib/arcgis";
+import {
+  resolveBusinessPlace,
+  resolveGeocodedPlace,
+} from "@/lib/arcgis";
 
 function readBias(request: NextRequest) {
   const latValue = request.nextUrl.searchParams.get("lat");
@@ -27,10 +30,20 @@ export async function GET(request: NextRequest) {
 
   const text = request.nextUrl.searchParams.get("text");
   const magicKey = request.nextUrl.searchParams.get("magicKey");
+  const placeId = request.nextUrl.searchParams.get("placeId");
+  if (placeId) {
+    const place = await resolveBusinessPlace(placeId);
+    return NextResponse.json(place);
+  }
+
   if (!text || !magicKey) {
     return NextResponse.json(null, { status: 400 });
   }
 
-  const place = await resolvePlace(text, magicKey, readBias(request));
+  const place = await resolveGeocodedPlace(
+    text,
+    magicKey,
+    readBias(request)
+  );
   return NextResponse.json(place);
 }
