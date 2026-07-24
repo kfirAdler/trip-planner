@@ -15,6 +15,11 @@ import {
   Sun,
   Moon,
   MapPin,
+  CalendarDays,
+  List,
+  ChevronRight,
+  LogOut,
+  Navigation,
   type LucideProps,
 } from "lucide-react";
 
@@ -39,3 +44,8 @@ export const IconSun = (props: LucideProps) => <Sun {...defaults} {...props} />;
 export const IconMoon = (props: LucideProps) => <Moon {...defaults} {...props} />;
 export const IconPin = (props: LucideProps) => <MapPin {...defaults} {...props} />;
 export const IconBack = (props: LucideProps) => <ChevronLeft {...defaults} {...props} />;
+export const IconCalendar = (props: LucideProps) => <CalendarDays {...defaults} {...props} />;
+export const IconList = (props: LucideProps) => <List {...defaults} {...props} />;
+export const IconChevronRight = (props: LucideProps) => <ChevronRight {...defaults} {...props} />;
+export const IconLogout = (props: LucideProps) => <LogOut {...defaults} {...props} />;
+export const IconNavigation = (props: LucideProps) => <Navigation {...defaults} {...props} />;

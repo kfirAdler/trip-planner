@@ -2,41 +2,79 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type Suggestion = { text: string; magicKey: string };
+type Suggestion =
+  | {
+      id: string;
+      source: "geocode";
+      text: string;
+      subtitle: string;
+      magicKey: string;
+    }
+  | {
+      id: string;
+      source: "places";
+      text: string;
+      subtitle: string;
+      placeId: string;
+    };
+type SearchField = "name" | "address";
+
+export type PlaceSearchBias = {
+  lat: number;
+  lng: number;
+  label?: string;
+};
 
 export function PlaceAutocomplete({
   defaultName = "",
   defaultAddress = "",
   defaultLat,
   defaultLng,
+  searchBias,
 }: {
   defaultName?: string;
   defaultAddress?: string;
   defaultLat?: number | null;
   defaultLng?: number | null;
+  searchBias?: PlaceSearchBias;
 }) {
   const [name, setName] = useState(defaultName);
   const [address, setAddress] = useState(defaultAddress);
   const [lat, setLat] = useState(defaultLat != null ? String(defaultLat) : "");
   const [lng, setLng] = useState(defaultLng != null ? String(defaultLng) : "");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [isOpen, setIsOpen] = useState(false);
+  const [activeField, setActiveField] = useState<SearchField | null>(null);
   const [isResolving, setIsResolving] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setActiveField(null);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, []);
 
-  function handleNameChange(value: string) {
-    setName(value);
+  function biasParams() {
+    if (!searchBias) return "";
+    return `&lat=${encodeURIComponent(searchBias.lat)}&lng=${encodeURIComponent(searchBias.lng)}`;
+  }
+
+  function handleSearch(field: SearchField, value: string) {
+    if (field === "name") setName(value);
+    else setAddress(value);
+
+    setActiveField(field);
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (value.trim().length < 2) {
@@ -45,48 +83,84 @@ export function PlaceAutocomplete({
     }
 
     debounceRef.current = setTimeout(async () => {
+      const requestId = ++requestIdRef.current;
       try {
-        const res = await fetch(`/api/places/suggest?q=${encodeURIComponent(value)}`);
-        if (!res.ok) return;
-        const data = await res.json();
+        const response = await fetch(
+          `/api/places/suggest?q=${encodeURIComponent(value)}&field=${field}${biasParams()}`
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+        if (requestId !== requestIdRef.current) return;
         setSuggestions(data.suggestions ?? []);
-        setIsOpen(true);
+        setActiveField(field);
       } catch {
-        // Search is a convenience on top of free typing — ignore network errors.
+        // Search is a convenience on top of free typing.
       }
     }, 300);
   }
 
   async function handleSelect(suggestion: Suggestion) {
-    setIsOpen(false);
+    setActiveField(null);
     setSuggestions([]);
-    // Suggestion text is a full breadcrumb ("Sensoji Temple, Taito, Tokyo,
-    // JPN") — good as the address line, too long for the name field. Use the
-    // resolved candidate's (usually shorter) label for name instead, once it
-    // comes back below.
     setName(suggestion.text.split(",")[0]);
-    setAddress(suggestion.text);
+    setAddress(suggestion.source === "geocode" ? suggestion.text : "");
     setIsResolving(true);
+
     try {
-      const res = await fetch(
-        `/api/places/resolve?text=${encodeURIComponent(suggestion.text)}&magicKey=${encodeURIComponent(suggestion.magicKey)}`
+      const resolutionParams =
+        suggestion.source === "places"
+          ? `placeId=${encodeURIComponent(suggestion.placeId)}`
+          : `text=${encodeURIComponent(suggestion.text)}&magicKey=${encodeURIComponent(suggestion.magicKey)}${biasParams()}`;
+      const response = await fetch(
+        `/api/places/resolve?${resolutionParams}`
       );
-      if (res.ok) {
-        const place = await res.json();
-        if (place) {
-          if (place.label) setName(place.label);
-          setLat(place.lat != null ? String(place.lat) : "");
-          setLng(place.lng != null ? String(place.lng) : "");
-        }
+      if (!response.ok) return;
+
+      const place = await response.json();
+      if (place) {
+        if (place.name) setName(place.name);
+        if (place.address) setAddress(place.address);
+        setLat(place.lat != null ? String(place.lat) : "");
+        setLng(place.lng != null ? String(place.lng) : "");
       }
     } finally {
       setIsResolving(false);
     }
   }
 
+  function suggestionList(field: SearchField) {
+    if (activeField !== field || suggestions.length === 0) return null;
+
+    return (
+      <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-border bg-surface shadow-lg">
+        {suggestions.map((suggestion) => (
+          <li key={suggestion.id}>
+            <button
+              type="button"
+              onClick={() => handleSelect(suggestion)}
+              className="flex w-full flex-col px-3 py-2 text-left active:bg-surface-muted"
+            >
+              <span className="text-sm font-bold">{suggestion.text}</span>
+              <span className="text-xs font-light text-foreground-muted">
+                {suggestion.subtitle}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-3">
-      <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="flex flex-col gap-3">
+      {searchBias && (
+        <p className="-mb-1 text-xs font-light text-foreground-muted">
+          Results prioritized near{" "}
+          <span className="font-bold">{searchBias.label ?? "the previous place"}</span>
+        </p>
+      )}
+
+      <div className="relative">
         <input
           name="name"
           required
@@ -94,8 +168,8 @@ export function PlaceAutocomplete({
           placeholder="Place name"
           autoComplete="off"
           value={name}
-          onChange={(e) => handleNameChange(e.target.value)}
-          onFocus={() => suggestions.length > 0 && setIsOpen(true)}
+          onChange={(event) => handleSearch("name", event.target.value)}
+          onFocus={() => suggestions.length > 0 && setActiveField("name")}
           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-bold"
         />
         {isResolving && (
@@ -103,50 +177,26 @@ export function PlaceAutocomplete({
             …
           </span>
         )}
-        {isOpen && suggestions.length > 0 && (
-          <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
-            {suggestions.map((s) => (
-              <li key={s.magicKey}>
-                <button
-                  type="button"
-                  onClick={() => handleSelect(s)}
-                  className="block w-full px-3 py-2 text-left text-sm active:bg-surface-muted"
-                >
-                  {s.text}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        {suggestionList("name")}
       </div>
 
-      <input
-        name="address"
-        placeholder="Address (optional)"
-        value={address}
-        onChange={(e) => setAddress(e.target.value)}
-        className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
-      />
-      <div className="flex gap-2">
+      <div className="relative">
         <input
-          name="lat"
-          type="number"
-          step="any"
-          placeholder="Latitude (optional)"
-          value={lat}
-          onChange={(e) => setLat(e.target.value)}
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          name="address"
+          placeholder="Search address (optional)"
+          autoComplete="off"
+          value={address}
+          onChange={(event) => handleSearch("address", event.target.value)}
+          onFocus={() => suggestions.length > 0 && setActiveField("address")}
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
         />
-        <input
-          name="lng"
-          type="number"
-          step="any"
-          placeholder="Longitude (optional)"
-          value={lng}
-          onChange={(e) => setLng(e.target.value)}
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
-        />
+        {suggestionList("address")}
       </div>
+
+      {/* Coordinates are map metadata populated by ArcGIS. They still submit
+          with the form, but aren't useful editing controls for travelers. */}
+      <input name="lat" type="hidden" value={lat} readOnly />
+      <input name="lng" type="hidden" value={lng} readOnly />
     </div>
   );
 }

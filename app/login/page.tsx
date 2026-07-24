@@ -1,16 +1,9 @@
 import { redirect } from "next/navigation";
-import { AuthError } from "next-auth";
 import { auth, signIn } from "@/auth";
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
+export default async function LoginPage() {
   const session = await auth();
   if (session?.user) redirect("/trips");
-  const { error } = await searchParams;
-  const showTestLogin = process.env.NODE_ENV !== "production";
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center bg-background px-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
@@ -73,61 +66,6 @@ export default async function LoginPage({
           <p className="px-2 text-center font-mono text-[0.7rem] font-bold tracking-widest text-hero-foreground/50 uppercase">
             Sign in to board — or accept a friend&apos;s invite
           </p>
-
-          {showTestLogin && (
-            <>
-              <div className="flex w-full items-center gap-3">
-                <div className="h-px flex-1 bg-hero-foreground/15" />
-                <span className="font-mono text-[0.65rem] tracking-widest text-hero-foreground/40 uppercase">
-                  Test access
-                </span>
-                <div className="h-px flex-1 bg-hero-foreground/15" />
-              </div>
-              <form
-                action={async (formData) => {
-                  "use server";
-                  try {
-                    await signIn("test-credentials", {
-                      username: formData.get("username"),
-                      password: formData.get("password"),
-                      redirectTo: "/trips",
-                    });
-                  } catch (err) {
-                    if (err instanceof AuthError) {
-                      redirect("/login?error=1");
-                    }
-                    throw err;
-                  }
-                }}
-                className="flex w-full flex-col gap-2"
-              >
-                <input
-                  name="username"
-                  placeholder="Username"
-                  autoComplete="username"
-                  className="rounded-full border border-hero-foreground/25 bg-transparent px-4 py-2.5 text-sm text-hero-foreground placeholder:text-hero-foreground/40"
-                />
-                <input
-                  name="password"
-                  type="password"
-                  placeholder="Password"
-                  autoComplete="current-password"
-                  className="rounded-full border border-hero-foreground/25 bg-transparent px-4 py-2.5 text-sm text-hero-foreground placeholder:text-hero-foreground/40"
-                />
-                <button
-                  type="submit"
-                  className="rounded-full border border-hero-foreground/40 py-2.5 text-sm font-bold text-hero-foreground active:scale-[0.98]"
-                >
-                  Test login
-                </button>
-                {error && (
-                  <p className="text-center text-xs font-bold text-hero-accent">
-                    Invalid username or password.
-                  </p>
-                )}
-              </form>
-            </>
-          )}
         </div>
       </div>
     </div>

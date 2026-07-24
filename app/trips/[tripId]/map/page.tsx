@@ -16,7 +16,11 @@ export default async function MapPage({
   const { trip } = await requireTripAccess(tripId, "VIEWER");
   const { day: rawDay } = await searchParams;
 
-  const apiKey = process.env.NEXT_PUBLIC_ARCGIS_API_KEY;
+  // Keep one ArcGIS credential for both the server-side geocoder and the
+  // browser map. This page is server-rendered, so the key is only handed to
+  // the authenticated map component instead of requiring a second public env
+  // variable.
+  const apiKey = process.env.ARCGIS_API_KEY;
   const dayCount = differenceInCalendarDays(trip.endDate, trip.startDate) + 1;
 
   const parsedDay = Number(rawDay);
@@ -25,34 +29,33 @@ export default async function MapPage({
       ? parsedDay - 1
       : null;
 
-  const all = await prisma.attraction.findMany({ where: { tripId } });
-  const mappable = all
+  const all = await prisma.attraction.findMany({
+    where: { tripId },
+    orderBy: [{ dayIndex: "asc" }, { position: "asc" }],
+  });
+  const ordered = [
+    ...all.filter((attraction) => attraction.dayIndex !== null),
+    ...all.filter((attraction) => attraction.dayIndex === null),
+  ];
+  const mappable = ordered
     .filter(
       (a): a is typeof a & { lat: number; lng: number } =>
         a.lat !== null && a.lng !== null
     )
-    .filter((a) => dayIndex === null || a.dayIndex === dayIndex);
+    .filter((a) => dayIndex === null || a.dayIndex === dayIndex)
+    .map((attraction, index) => ({
+      ...attraction,
+      routeOrder: index + 1,
+    }));
+  const initialLocation = ordered.find(
+    (attraction) => attraction.lat !== null && attraction.lng !== null
+  );
 
   if (!apiKey) {
     return (
       <EmptyState
         title="Map isn't set up yet"
-        message="Add NEXT_PUBLIC_ARCGIS_API_KEY to .env.local to see your places on a map."
-      />
-    );
-  }
-
-  if (mappable.length === 0) {
-    return (
-      <EmptyState
-        title={dayIndex === null ? "No places on the map yet" : `Nothing on Day ${dayIndex + 1} has a location yet`}
-        message={
-          all.length === 0
-            ? "Add places from the itinerary page to see them here."
-            : "Add a latitude/longitude to your places (from the itinerary page) to plot them here."
-        }
-        dayIndex={dayIndex}
-        tripId={tripId}
+        message="Add ARCGIS_API_KEY to the app environment to see your places on a map."
       />
     );
   }
@@ -71,7 +74,17 @@ export default async function MapPage({
           </Link>
         </div>
       )}
-      <TripMap attractions={mappable} apiKey={apiKey} />
+      <TripMap
+        attractions={mappable}
+        apiKey={apiKey}
+        initialCenter={
+          initialLocation?.lat !== null &&
+          initialLocation?.lat !== undefined &&
+          initialLocation.lng !== null
+            ? { lat: initialLocation.lat, lng: initialLocation.lng }
+            : undefined
+        }
+      />
     </div>
   );
 }

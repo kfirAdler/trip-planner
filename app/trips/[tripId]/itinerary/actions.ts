@@ -6,7 +6,10 @@ import { requireTripActionAccess } from "@/lib/trip-access";
 import { prisma } from "@/lib/prisma";
 import { saveImage } from "@/lib/storage";
 import { CATEGORIES } from "@/lib/categories";
-import type { Category } from "@/app/generated/prisma/client";
+import type {
+  Category,
+  Prisma,
+} from "@/app/generated/prisma/client";
 
 const attractionSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(120),
@@ -39,12 +42,50 @@ function readAttractionForm(
   });
 }
 
-async function nextPositionForDay(tripId: string, dayIndex: number) {
-  const last = await prisma.attraction.findFirst({
+function hasSortableTime(time: string | null): time is string {
+  return time !== null && /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
+}
+
+async function repositionTimedAttraction(
+  tx: Prisma.TransactionClient,
+  tripId: string,
+  dayIndex: number,
+  attractionId: string
+) {
+  const dayItems = await tx.attraction.findMany({
     where: { tripId, dayIndex },
-    orderBy: { position: "desc" },
+    orderBy: { position: "asc" },
+    select: { id: true, position: true, time: true },
   });
-  return (last?.position ?? -1) + 1;
+  const target = dayItems.find((item) => item.id === attractionId);
+  if (!target || !hasSortableTime(target.time)) return;
+  const targetTime = target.time;
+
+  const ordered = dayItems.filter((item) => item.id !== attractionId);
+  const laterTimedIndex = ordered.findIndex(
+    (item) =>
+      hasSortableTime(item.time) &&
+      item.time.localeCompare(targetTime) > 0
+  );
+  const lastTimedIndex = ordered.findLastIndex((item) =>
+    hasSortableTime(item.time)
+  );
+  const insertionIndex =
+    laterTimedIndex >= 0
+      ? laterTimedIndex
+      : lastTimedIndex >= 0
+        ? lastTimedIndex + 1
+        : ordered.length;
+  ordered.splice(insertionIndex, 0, target);
+
+  await Promise.all(
+    ordered.map((item, position) =>
+      tx.attraction.update({
+        where: { id: item.id },
+        data: { position },
+      })
+    )
+  );
 }
 
 export async function addAttraction(
@@ -61,21 +102,51 @@ export async function addAttraction(
     photoUrl = (await saveImage(photoFile, { prefix: "attraction" })).url;
   }
 
-  await prisma.attraction.create({
-    data: {
-      tripId,
-      name: parsed.name,
-      category: parsed.category as Category,
-      dayIndex,
-      position: await nextPositionForDay(tripId, dayIndex),
-      time: parsed.time || null,
-      address: parsed.address || null,
-      lat: parsed.lat ?? null,
-      lng: parsed.lng ?? null,
-      notes: parsed.notes || null,
-      photoUrl,
-      createdById: userId,
-    },
+  const insertAfterId = String(formData.get("insertAfterId") ?? "").trim();
+
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.attraction.findMany({
+      where: { tripId, dayIndex },
+      orderBy: { position: "asc" },
+      select: { id: true, position: true, time: true },
+    });
+
+    const created = await tx.attraction.create({
+      data: {
+        tripId,
+        name: parsed.name,
+        category: parsed.category as Category,
+        dayIndex,
+        position: (existing.at(-1)?.position ?? -1) + 1,
+        time: parsed.time || null,
+        address: parsed.address || null,
+        lat: parsed.lat ?? null,
+        lng: parsed.lng ?? null,
+        notes: parsed.notes || null,
+        photoUrl,
+        createdById: userId,
+      },
+      select: { id: true, position: true, time: true },
+    });
+
+    if (hasSortableTime(created.time)) {
+      await repositionTimedAttraction(tx, tripId, dayIndex, created.id);
+      return;
+    }
+
+    const ordered = [...existing];
+    const requestedIndex = existing.findIndex((item) => item.id === insertAfterId);
+    const insertionIndex = requestedIndex >= 0 ? requestedIndex + 1 : existing.length;
+    ordered.splice(insertionIndex, 0, created);
+
+    await Promise.all(
+      ordered.map((item, position) =>
+        tx.attraction.update({
+          where: { id: item.id },
+          data: { position },
+        })
+      )
+    );
   });
 
   revalidatePath(`/trips/${tripId}/itinerary`);
@@ -141,9 +212,23 @@ export async function linkAttractionToDay(
   await requireTripActionAccess(tripId, "EDITOR");
   const dayIndex = z.coerce.number().int().min(0).parse(formData.get("dayIndex"));
 
-  await prisma.attraction.update({
-    where: { id: attractionId },
-    data: { dayIndex, position: await nextPositionForDay(tripId, dayIndex) },
+  await prisma.$transaction(async (tx) => {
+    const attraction = await tx.attraction.findFirstOrThrow({
+      where: { id: attractionId, tripId },
+    });
+    const last = await tx.attraction.findFirst({
+      where: { tripId, dayIndex },
+      orderBy: { position: "desc" },
+    });
+
+    await tx.attraction.update({
+      where: { id: attractionId },
+      data: { dayIndex, position: (last?.position ?? -1) + 1 },
+    });
+
+    if (hasSortableTime(attraction.time)) {
+      await repositionTimedAttraction(tx, tripId, dayIndex, attractionId);
+    }
   });
 
   revalidatePath(`/trips/${tripId}/itinerary`);
@@ -173,29 +258,49 @@ export async function updateAttraction(
     photoUrl = (await saveImage(photoFile, { prefix: "attraction" })).url;
   }
 
-  const existing = await prisma.attraction.findFirstOrThrow({
-    where: { id: attractionId, tripId },
-  });
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.attraction.findFirstOrThrow({
+      where: { id: attractionId, tripId },
+    });
 
-  let position = existing.position;
-  if (existing.dayIndex !== parsedDayIndex) {
-    position = parsedDayIndex === null ? 0 : await nextPositionForDay(tripId, parsedDayIndex);
-  }
+    let position = existing.position;
+    if (existing.dayIndex !== parsedDayIndex) {
+      if (parsedDayIndex === null) {
+        position = 0;
+      } else {
+        const last = await tx.attraction.findFirst({
+          where: { tripId, dayIndex: parsedDayIndex },
+          orderBy: { position: "desc" },
+        });
+        position = (last?.position ?? -1) + 1;
+      }
+    }
 
-  await prisma.attraction.update({
-    where: { id: attractionId },
-    data: {
-      name: parsed.name,
-      category: parsed.category as Category,
-      dayIndex: parsedDayIndex,
-      position,
-      time: parsed.time || null,
-      address: parsed.address || null,
-      lat: parsed.lat ?? null,
-      lng: parsed.lng ?? null,
-      notes: parsed.notes || null,
-      ...(photoUrl ? { photoUrl } : {}),
-    },
+    const updated = await tx.attraction.update({
+      where: { id: attractionId },
+      data: {
+        name: parsed.name,
+        category: parsed.category as Category,
+        dayIndex: parsedDayIndex,
+        position,
+        time: parsed.time || null,
+        address: parsed.address || null,
+        lat: parsed.lat ?? null,
+        lng: parsed.lng ?? null,
+        notes: parsed.notes || null,
+        ...(photoUrl ? { photoUrl } : {}),
+      },
+      select: { time: true },
+    });
+
+    if (parsedDayIndex !== null && hasSortableTime(updated.time)) {
+      await repositionTimedAttraction(
+        tx,
+        tripId,
+        parsedDayIndex,
+        attractionId
+      );
+    }
   });
 
   revalidatePath(`/trips/${tripId}/itinerary`);

@@ -1,54 +1,12 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
-import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 
-// Dev-only username/password login so this account can be tested without a
-// real Google OAuth round-trip. It authenticates AS the existing Google-linked
-// user (AUTH_TEST_USER_EMAIL), never creates a separate account, and is
-// entirely excluded from production builds (see the `providers` array below)
-// so it can never become a real attack surface once this is deployed.
-const testCredentialsProvider = Credentials({
-  id: "test-credentials",
-  name: "Test login",
-  credentials: {
-    username: { label: "Username", type: "text" },
-    password: { label: "Password", type: "password" },
-  },
-  async authorize(credentials) {
-    const username = credentials?.username;
-    const password = credentials?.password;
-    const passwordHash = process.env.AUTH_TEST_PASSWORD_HASH;
-    const userEmail = process.env.AUTH_TEST_USER_EMAIL;
-    if (
-      typeof username !== "string" ||
-      typeof password !== "string" ||
-      !passwordHash ||
-      !userEmail ||
-      username !== "kfir"
-    ) {
-      return null;
-    }
-
-    const passwordMatches = await bcrypt.compare(password, passwordHash);
-    if (!passwordMatches) return null;
-
-    const user = await prisma.user.findUnique({ where: { email: userEmail } });
-    return user;
-  },
-});
-
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
-  // Credentials-based sign-in isn't compatible with database sessions, so the
-  // whole app uses JWT sessions once this provider is present.
   session: { strategy: "jwt" },
-  providers:
-    process.env.NODE_ENV === "production"
-      ? [Google]
-      : [Google, testCredentialsProvider],
+  providers: [Google],
   callbacks: {
     // Resolves any pending TripInvite for this email into a real TripMember.
     // Runs on every sign-in (not just first-time), so it also catches an
