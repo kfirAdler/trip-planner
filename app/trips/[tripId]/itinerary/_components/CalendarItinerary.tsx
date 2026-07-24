@@ -72,6 +72,18 @@ export function CalendarItinerary({
 
   const selectedDate = addDays(startDate, selectedDayIndex);
   const selectedAttractions = byDay.get(selectedDayIndex) ?? [];
+  const previousAttraction = selectedAttractions.at(-1);
+  const searchBias =
+    previousAttraction?.lat !== null &&
+    previousAttraction?.lat !== undefined &&
+    previousAttraction.lng !== null &&
+    previousAttraction.lng !== undefined
+      ? {
+          lat: previousAttraction.lat,
+          lng: previousAttraction.lng,
+          label: previousAttraction.name,
+        }
+      : undefined;
   const firstMonth = startOfMonth(startDate);
   const lastMonth = startOfMonth(endDate);
   const canGoBack = isAfter(visibleMonth, firstMonth);
@@ -216,7 +228,11 @@ export function CalendarItinerary({
 
         {canEdit && (
           <div className="pl-[38px]">
-            <AddAttractionForm tripId={tripId} dayIndex={selectedDayIndex} />
+            <AddAttractionForm
+              tripId={tripId}
+              dayIndex={selectedDayIndex}
+              searchBias={searchBias}
+            />
           </div>
         )}
       </section>

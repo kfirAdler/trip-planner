@@ -3,7 +3,10 @@
 import { useRef, useState } from "react";
 import { CATEGORIES, CATEGORY_META } from "@/lib/categories";
 import { addAttraction, addUnscheduledAttraction } from "../actions";
-import { PlaceAutocomplete } from "./PlaceAutocomplete";
+import {
+  PlaceAutocomplete,
+  type PlaceSearchBias,
+} from "./PlaceAutocomplete";
 import { IconAdd } from "@/components/icons";
 import type { Category } from "@/app/generated/prisma/client";
 
@@ -11,8 +14,10 @@ export function AddAttractionForm({
   tripId,
   dayIndex,
   fixedCategory,
+  searchBias,
 }: {
   tripId: string;
+  searchBias?: PlaceSearchBias;
 } & (
   | { dayIndex: number; fixedCategory?: undefined }
   | { dayIndex?: undefined; fixedCategory: Category }
@@ -47,7 +52,7 @@ export function AddAttractionForm({
       }}
       className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4"
     >
-      <PlaceAutocomplete />
+      <PlaceAutocomplete searchBias={searchBias} />
       <div className="flex gap-2">
         {dayIndex !== undefined && (
           <select

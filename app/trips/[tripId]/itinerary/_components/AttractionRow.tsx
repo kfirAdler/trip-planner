@@ -10,7 +10,10 @@ import {
   moveAttraction,
   linkAttractionToDay,
 } from "../actions";
-import { PlaceAutocomplete } from "./PlaceAutocomplete";
+import {
+  PlaceAutocomplete,
+  type PlaceSearchBias,
+} from "./PlaceAutocomplete";
 import {
   IconEdit,
   IconRemove,
@@ -44,6 +47,7 @@ export function AttractionRow({
   isLast,
   onMove,
   isMoving = false,
+  searchBias,
 }: {
   tripId: string;
   attraction: Attraction;
@@ -55,6 +59,7 @@ export function AttractionRow({
   isLast: boolean;
   onMove?: (direction: "up" | "down") => void;
   isMoving?: boolean;
+  searchBias?: PlaceSearchBias;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -80,6 +85,7 @@ export function AttractionRow({
           defaultAddress={attraction.address ?? ""}
           defaultLat={attraction.lat}
           defaultLng={attraction.lng}
+          searchBias={searchBias}
         />
         <div className="flex gap-2">
           <select

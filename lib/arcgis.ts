@@ -8,9 +8,18 @@ const CANDIDATES_URL =
 const JAPAN_BIAS_LOCATION = "138.25,36.2";
 
 export type PlaceSuggestion = { text: string; magicKey: string };
-export type ResolvedPlace = { label: string; lat: number; lng: number };
+export type PlaceSearchBias = { lat: number; lng: number };
+export type ResolvedPlace = {
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+};
 
-export async function suggestPlaces(query: string): Promise<PlaceSuggestion[]> {
+export async function suggestPlaces(
+  query: string,
+  bias?: PlaceSearchBias
+): Promise<PlaceSuggestion[]> {
   const token = process.env.ARCGIS_API_KEY;
   if (!token) return [];
 
@@ -18,7 +27,10 @@ export async function suggestPlaces(query: string): Promise<PlaceSuggestion[]> {
   url.searchParams.set("f", "json");
   url.searchParams.set("token", token);
   url.searchParams.set("text", query);
-  url.searchParams.set("location", JAPAN_BIAS_LOCATION);
+  url.searchParams.set(
+    "location",
+    bias ? `${bias.lng},${bias.lat}` : JAPAN_BIAS_LOCATION
+  );
   url.searchParams.set("countryCode", "JPN");
   url.searchParams.set("maxSuggestions", "8");
 
@@ -38,7 +50,8 @@ export async function suggestPlaces(query: string): Promise<PlaceSuggestion[]> {
 
 export async function resolvePlace(
   text: string,
-  magicKey: string
+  magicKey: string,
+  bias?: PlaceSearchBias
 ): Promise<ResolvedPlace | null> {
   const token = process.env.ARCGIS_API_KEY;
   if (!token) return null;
@@ -48,7 +61,12 @@ export async function resolvePlace(
   url.searchParams.set("token", token);
   url.searchParams.set("singleLine", text);
   url.searchParams.set("magicKey", magicKey);
-  url.searchParams.set("outFields", "*");
+  url.searchParams.set("countryCode", "JPN");
+  url.searchParams.set(
+    "location",
+    bias ? `${bias.lng},${bias.lat}` : JAPAN_BIAS_LOCATION
+  );
+  url.searchParams.set("outFields", "PlaceName,ShortLabel,Match_addr");
 
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) return null;
@@ -58,7 +76,13 @@ export async function resolvePlace(
   if (!best?.location) return null;
 
   return {
-    label: best.address as string,
+    name:
+      (best.attributes?.PlaceName as string | undefined) ||
+      (best.attributes?.ShortLabel as string | undefined) ||
+      String(best.address).split(",")[0],
+    address:
+      (best.attributes?.Match_addr as string | undefined) ||
+      (best.address as string),
     lat: best.location.y as number,
     lng: best.location.x as number,
   };

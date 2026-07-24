@@ -101,6 +101,18 @@ export function DayAttractionsList({
       {items.map((attraction, index) => {
         const meta = CATEGORY_META[attraction.category];
         const isTerminus = attraction.category === "LODGING";
+        const previous = index > 0 ? items[index - 1] : null;
+        const searchBias =
+          previous?.lat !== null &&
+          previous?.lat !== undefined &&
+          previous.lng !== null &&
+          previous.lng !== undefined
+            ? {
+                lat: previous.lat,
+                lng: previous.lng,
+                label: previous.name,
+              }
+            : undefined;
 
         return (
           <div
@@ -131,6 +143,7 @@ export function DayAttractionsList({
                 isLast={index === items.length - 1}
                 isMoving={movingId !== null}
                 onMove={(direction) => move(attraction.id, direction)}
+                searchBias={searchBias}
               />
             </div>
           </div>

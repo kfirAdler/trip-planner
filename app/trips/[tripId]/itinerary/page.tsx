@@ -94,6 +94,18 @@ export default async function ItineraryPage({
       ) : (
         Array.from({ length: dayCount }).map((_, dayIndex) => {
           const dayAttractions = byDay.get(dayIndex) ?? [];
+          const previousAttraction = dayAttractions.at(-1);
+          const searchBias =
+            previousAttraction?.lat !== null &&
+            previousAttraction?.lat !== undefined &&
+            previousAttraction.lng !== null &&
+            previousAttraction.lng !== undefined
+              ? {
+                  lat: previousAttraction.lat,
+                  lng: previousAttraction.lng,
+                  label: previousAttraction.name,
+                }
+              : undefined;
           const date = addDays(trip.startDate, dayIndex);
           const hasMappable = dayAttractions.some((a) => a.lat !== null && a.lng !== null);
 
@@ -134,7 +146,11 @@ export default async function ItineraryPage({
 
               {canEdit && (
                 <div className="pl-[38px]">
-                  <AddAttractionForm tripId={tripId} dayIndex={dayIndex} />
+                  <AddAttractionForm
+                    tripId={tripId}
+                    dayIndex={dayIndex}
+                    searchBias={searchBias}
+                  />
                 </div>
               )}
             </details>
