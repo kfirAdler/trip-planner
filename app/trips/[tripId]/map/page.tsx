@@ -29,13 +29,24 @@ export default async function MapPage({
       ? parsedDay - 1
       : null;
 
-  const all = await prisma.attraction.findMany({ where: { tripId } });
-  const mappable = all
+  const all = await prisma.attraction.findMany({
+    where: { tripId },
+    orderBy: [{ dayIndex: "asc" }, { position: "asc" }],
+  });
+  const ordered = [
+    ...all.filter((attraction) => attraction.dayIndex !== null),
+    ...all.filter((attraction) => attraction.dayIndex === null),
+  ];
+  const mappable = ordered
     .filter(
       (a): a is typeof a & { lat: number; lng: number } =>
         a.lat !== null && a.lng !== null
     )
-    .filter((a) => dayIndex === null || a.dayIndex === dayIndex);
+    .filter((a) => dayIndex === null || a.dayIndex === dayIndex)
+    .map((attraction, index) => ({
+      ...attraction,
+      routeOrder: index + 1,
+    }));
 
   if (!apiKey) {
     return (

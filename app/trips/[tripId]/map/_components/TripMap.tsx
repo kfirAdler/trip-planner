@@ -10,6 +10,8 @@ type MappableAttraction = {
   id: string;
   name: string;
   category: Category;
+  dayIndex: number | null;
+  routeOrder: number;
   lat: number;
   lng: number;
   time: string | null;
@@ -66,7 +68,7 @@ function DetailSheet({
         <div>
           <p className="flex items-center gap-1.5 text-xs font-bold text-foreground-muted">
             <Icon size={13} style={{ color: meta.color }} />
-            {meta.label}
+            Stop {String(attraction.routeOrder).padStart(2, "0")} · {meta.label}
             {attraction.time ? ` · ${attraction.time}` : ""}
           </p>
           <p className="mt-0.5 text-lg font-bold leading-tight">{attraction.name}</p>

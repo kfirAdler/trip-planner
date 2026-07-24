@@ -8,7 +8,10 @@ import MapView from "@arcgis/core/views/MapView.js";
 import GraphicsLayer from "@arcgis/core/layers/GraphicsLayer.js";
 import Graphic from "@arcgis/core/Graphic.js";
 import Point from "@arcgis/core/geometry/Point.js";
+import Polyline from "@arcgis/core/geometry/Polyline.js";
 import SimpleMarkerSymbol from "@arcgis/core/symbols/SimpleMarkerSymbol.js";
+import SimpleLineSymbol from "@arcgis/core/symbols/SimpleLineSymbol.js";
+import TextSymbol from "@arcgis/core/symbols/TextSymbol.js";
 import "@arcgis/core/assets/esri/themes/light/main.css";
 import { CATEGORY_META } from "@/lib/categories";
 import type { Category } from "@/app/generated/prisma/client";
@@ -16,6 +19,8 @@ import type { Category } from "@/app/generated/prisma/client";
 type MappableAttraction = {
   id: string;
   category: Category;
+  dayIndex: number | null;
+  routeOrder: number;
   lat: number;
   lng: number;
 };
@@ -27,6 +32,15 @@ function navigationBasemap(isDark: boolean) {
       language: "en",
       places: "all",
     },
+  });
+}
+
+function routeLineSymbol(isDark: boolean) {
+  return new SimpleLineSymbol({
+    color: isDark ? [140, 174, 212, 0.9] : [23, 38, 61, 0.75],
+    width: 3,
+    cap: "round",
+    join: "round",
   });
 }
 
@@ -57,25 +71,73 @@ export function ArcgisMapCanvas({
       ? document.documentElement.dataset.theme === "dark"
       : window.matchMedia("(prefers-color-scheme: dark)").matches;
 
-    const layer = new GraphicsLayer({
-      graphics: attractions.map((attraction) => {
+    const byDay = new Map<number, MappableAttraction[]>();
+    for (const attraction of attractions) {
+      if (attraction.dayIndex === null) continue;
+      const dayRoute = byDay.get(attraction.dayIndex) ?? [];
+      dayRoute.push(attraction);
+      byDay.set(attraction.dayIndex, dayRoute);
+    }
+
+    const routeGraphics = Array.from(byDay.values())
+      .filter((dayRoute) => dayRoute.length > 1)
+      .map(
+        (dayRoute) =>
+          new Graphic({
+            geometry: new Polyline({
+              paths: [
+                dayRoute.map((attraction) => [
+                  attraction.lng,
+                  attraction.lat,
+                ]),
+              ],
+              spatialReference: { wkid: 4326 },
+            }),
+            symbol: routeLineSymbol(isDark),
+          })
+      );
+    const routeLayer = new GraphicsLayer({ graphics: routeGraphics });
+
+    const pointGraphics = attractions.map((attraction) => {
         const meta = CATEGORY_META[attraction.category];
-        const isTerminus = attraction.category === "LODGING";
         return new Graphic({
           geometry: new Point({ longitude: attraction.lng, latitude: attraction.lat }),
           symbol: new SimpleMarkerSymbol({
             color: meta.hex,
-            size: isTerminus ? 18 : 14,
-            outline: { color: "#ffffff", width: 1.5 },
+            size: 24,
+            outline: { color: "#ffffff", width: 2 },
           }),
           attributes: { id: attraction.id },
         });
-      }),
+      });
+    const numberGraphics = attractions.map(
+      (attraction) =>
+        new Graphic({
+          geometry: new Point({
+            longitude: attraction.lng,
+            latitude: attraction.lat,
+          }),
+          symbol: new TextSymbol({
+            text: String(attraction.routeOrder),
+            color: "#ffffff",
+            haloColor: "rgba(0, 0, 0, 0.35)",
+            haloSize: 1,
+            font: {
+              family: "Arial",
+              size: 9,
+              weight: "bold",
+            },
+          }),
+          attributes: { id: attraction.id },
+        })
+    );
+    const markerLayer = new GraphicsLayer({
+      graphics: [...pointGraphics, ...numberGraphics],
     });
 
     const map = new EsriMap({
       basemap: navigationBasemap(isDark),
-      layers: [layer],
+      layers: [routeLayer, markerLayer],
     });
 
     const first = attractions[0];
@@ -96,11 +158,18 @@ export function ArcgisMapCanvas({
     const handleThemeChange = (event: Event) => {
       const theme = (event as CustomEvent<{ theme: "light" | "dark" }>).detail
         .theme;
-      map.basemap = navigationBasemap(theme === "dark");
+      const nextIsDark = theme === "dark";
+      map.basemap = navigationBasemap(nextIsDark);
+      routeLayer.graphics.forEach((graphic) => {
+        graphic.symbol = routeLineSymbol(nextIsDark);
+      });
     };
     const handleSystemThemeChange = (event: MediaQueryListEvent) => {
       if (!document.documentElement.dataset.theme) {
         map.basemap = navigationBasemap(event.matches);
+        routeLayer.graphics.forEach((graphic) => {
+          graphic.symbol = routeLineSymbol(event.matches);
+        });
       }
     };
 
@@ -108,7 +177,7 @@ export function ArcgisMapCanvas({
     systemTheme.addEventListener("change", handleSystemThemeChange);
 
     const clickHandle = view.on("click", async (event) => {
-      const { results } = await view.hitTest(event, { include: layer });
+      const { results } = await view.hitTest(event, { include: markerLayer });
       const hit = results.find(
         (r): r is typeof r & { type: "graphic" } => r.type === "graphic"
       );
@@ -119,7 +188,7 @@ export function ArcgisMapCanvas({
     view
       .when(() => {
         if (attractions.length > 1) {
-          return view.goTo(layer.graphics.toArray(), { animate: false });
+          return view.goTo(pointGraphics, { animate: false });
         }
       })
       .catch(() => {});
