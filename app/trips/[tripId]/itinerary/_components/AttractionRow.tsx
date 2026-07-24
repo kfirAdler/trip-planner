@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import Image from "next/image";
 import Link from "next/link";
 import { CATEGORIES, CATEGORY_META } from "@/lib/categories";
@@ -134,21 +135,7 @@ export function AttractionRow({
           accept="image/*"
           className="text-xs file:mr-2 file:rounded-full file:border-0 file:bg-primary file:px-2 file:py-1 file:text-xs file:font-bold file:text-primary-foreground"
         />
-        <div className="mt-1 flex gap-2">
-          <button
-            type="submit"
-            className="flex-1 rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
-          >
-            Save
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsEditing(false)}
-            className="rounded-full border border-border px-4 py-2 text-sm font-bold"
-          >
-            Cancel
-          </button>
-        </div>
+        <EditFormActions onCancel={() => setIsEditing(false)} />
       </form>
     );
   }
@@ -388,6 +375,37 @@ export function AttractionRow({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function EditFormActions({ onCancel }: { onCancel: () => void }) {
+  const { pending } = useFormStatus();
+
+  return (
+    <div className="mt-1 flex gap-2">
+      <button
+        type="submit"
+        disabled={pending}
+        aria-live="polite"
+        className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground disabled:cursor-wait disabled:opacity-80"
+      >
+        {pending && (
+          <span
+            aria-hidden
+            className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+          />
+        )}
+        {pending ? "Saving…" : "Save"}
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        disabled={pending}
+        className="rounded-full border border-border px-4 py-2 text-sm font-bold disabled:opacity-50"
+      >
+        Cancel
+      </button>
     </div>
   );
 }
