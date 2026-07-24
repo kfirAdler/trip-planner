@@ -10,7 +10,6 @@ export default async function LoginPage({
   const session = await auth();
   if (session?.user) redirect("/trips");
   const { error } = await searchParams;
-  const showTestLogin = process.env.NODE_ENV !== "production";
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center bg-background px-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
@@ -74,8 +73,7 @@ export default async function LoginPage({
             Sign in to board — or accept a friend&apos;s invite
           </p>
 
-          {showTestLogin && (
-            <>
+          <>
               <div className="flex w-full items-center gap-3">
                 <div className="h-px flex-1 bg-hero-foreground/15" />
                 <span className="font-mono text-[0.65rem] tracking-widest text-hero-foreground/40 uppercase">
@@ -102,7 +100,7 @@ export default async function LoginPage({
                 className="flex w-full flex-col gap-2"
               >
                 <p className="text-center font-mono text-[0.65rem] tracking-widest text-hero-foreground/50 uppercase">
-                  Temporary local access · kfir / kfir
+                  Temporary branch access · kfir / kfir
                 </p>
                 <input
                   name="username"
@@ -133,8 +131,7 @@ export default async function LoginPage({
                   </p>
                 )}
               </form>
-            </>
-          )}
+          </>
         </div>
       </div>
     </div>

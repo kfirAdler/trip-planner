@@ -4,11 +4,10 @@ import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 
-// Dev-only username/password login so this account can be tested without a
-// real Google OAuth round-trip. It authenticates as the configured test user,
-// or the owner of the first trip when no test email is configured. It never
-// creates a separate account and is entirely excluded from production builds
-// (see the `providers` array below).
+// TEMPORARY branch-testing login. Remove this provider and the matching form
+// once testing is complete. It authenticates as the configured test user, or
+// the owner of the first trip when no test email is configured, and never
+// creates a separate account.
 const testCredentialsProvider = Credentials({
   id: "test-credentials",
   name: "Test login",
@@ -19,11 +18,7 @@ const testCredentialsProvider = Credentials({
   async authorize(credentials) {
     const username = credentials?.username;
     const password = credentials?.password;
-    if (
-      username !== "kfir" ||
-      password !== "kfir" ||
-      process.env.NODE_ENV === "production"
-    ) {
+    if (username !== "kfir" || password !== "kfir") {
       return null;
     }
 
@@ -45,10 +40,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // Credentials-based sign-in isn't compatible with database sessions, so the
   // whole app uses JWT sessions once this provider is present.
   session: { strategy: "jwt" },
-  providers:
-    process.env.NODE_ENV === "production"
-      ? [Google]
-      : [Google, testCredentialsProvider],
+  // TEMPORARY: keep credentials enabled in branch previews for manual testing.
+  providers: [Google, testCredentialsProvider],
   callbacks: {
     // Resolves any pending TripInvite for this email into a real TripMember.
     // Runs on every sign-in (not just first-time), so it also catches an
