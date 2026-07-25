@@ -11,9 +11,10 @@ export default async function TripHomePage({
   params: Promise<{ tripId: string }>;
 }) {
   const { tripId } = await params;
-  const { trip, member } = await requireTripAccess(tripId, "VIEWER");
-
-  const attractionCount = await prisma.attraction.count({ where: { tripId } });
+  const [{ trip, member }, attractionCount] = await Promise.all([
+    requireTripAccess(tripId, "VIEWER"),
+    prisma.attraction.count({ where: { tripId } }),
+  ]);
   const dayCount = differenceInCalendarDays(trip.endDate, trip.startDate) + 1;
 
   return (

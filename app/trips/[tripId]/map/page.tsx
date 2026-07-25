@@ -12,9 +12,17 @@ export default async function MapPage({
   params: Promise<{ tripId: string }>;
   searchParams: Promise<{ day?: string }>;
 }) {
-  const { tripId } = await params;
-  const { trip } = await requireTripAccess(tripId, "VIEWER");
-  const { day: rawDay } = await searchParams;
+  const [{ tripId }, { day: rawDay }] = await Promise.all([
+    params,
+    searchParams,
+  ]);
+  const [{ trip }, all] = await Promise.all([
+    requireTripAccess(tripId, "VIEWER"),
+    prisma.attraction.findMany({
+      where: { tripId },
+      orderBy: [{ dayIndex: "asc" }, { position: "asc" }],
+    }),
+  ]);
 
   // Keep one ArcGIS credential for both the server-side geocoder and the
   // browser map. This page is server-rendered, so the key is only handed to
@@ -29,10 +37,6 @@ export default async function MapPage({
       ? parsedDay - 1
       : null;
 
-  const all = await prisma.attraction.findMany({
-    where: { tripId },
-    orderBy: [{ dayIndex: "asc" }, { position: "asc" }],
-  });
   const ordered = [
     ...all.filter((attraction) => attraction.dayIndex !== null),
     ...all.filter((attraction) => attraction.dayIndex === null),

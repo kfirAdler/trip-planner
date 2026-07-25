@@ -9,6 +9,7 @@ import {
   IconStats,
   IconShare,
 } from "@/components/icons";
+import { LinkPendingIndicator } from "@/components/LinkPendingIndicator";
 
 const TABS = [
   { href: "", label: "Home", Icon: IconHome },
@@ -35,6 +36,7 @@ export function TripTabBar({ tripId }: { tripId: string }) {
           <Link
             key={href}
             href={fullHref}
+            prefetch={href === "/stats" ? true : null}
             className="relative flex min-h-[3.25rem] flex-1 flex-col items-center justify-center gap-0.5 text-xs"
           >
             {isActive && (
@@ -43,10 +45,15 @@ export function TripTabBar({ tripId }: { tripId: string }) {
                 className="absolute top-0 h-[3px] w-8 rounded-full bg-accent"
               />
             )}
-            <Icon
-              size={22}
-              className={isActive ? "text-primary" : "text-foreground-muted"}
-            />
+            <span className="relative flex h-[22px] w-[22px] items-center justify-center">
+              <Icon
+                size={22}
+                className={isActive ? "text-primary" : "text-foreground-muted"}
+              />
+              <LinkPendingIndicator
+                className={isActive ? "inset-0 m-auto bg-surface text-primary" : "inset-0 m-auto bg-surface text-foreground-muted"}
+              />
+            </span>
             <span className={isActive ? "font-bold text-primary" : "font-light text-foreground-muted"}>
               {label}
             </span>

@@ -21,7 +21,13 @@ export default async function ItineraryPage({
 }) {
   const { tripId } = await params;
   const { view } = await searchParams;
-  const { trip, member } = await requireTripAccess(tripId, "VIEWER");
+  const [{ trip, member }, attractions] = await Promise.all([
+    requireTripAccess(tripId, "VIEWER"),
+    prisma.attraction.findMany({
+      where: { tripId, dayIndex: { not: null } },
+      orderBy: [{ dayIndex: "asc" }, { position: "asc" }],
+    }),
+  ]);
   const canEdit = member.role !== "VIEWER";
   const isCalendarView = view === "calendar";
 
@@ -30,11 +36,6 @@ export default async function ItineraryPage({
   // Places added from the Stats tab start unscheduled (dayIndex null) until
   // linked to a day, so they're excluded here — they simply don't show up
   // in the day-by-day itinerary until then.
-  const attractions = await prisma.attraction.findMany({
-    where: { tripId, dayIndex: { not: null } },
-    orderBy: [{ dayIndex: "asc" }, { position: "asc" }],
-  });
-
   const byDay = new Map<number, typeof attractions>();
   for (const attraction of attractions) {
     const dayIndex = attraction.dayIndex as number;
