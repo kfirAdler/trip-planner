@@ -84,6 +84,18 @@ export function TripMap({
     : -1;
 
   useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const previousOverscrollBehavior = document.body.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.overscrollBehavior = previousOverscrollBehavior;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!("geolocation" in navigator)) return;
 
     let cancelled = false;
@@ -188,7 +200,7 @@ export function TripMap({
   }
 
   return (
-    <div className="relative flex-1">
+    <div className="relative min-h-0 flex-1 overflow-hidden">
       <ArcgisMapCanvas
         attractions={attractions}
         apiKey={apiKey}
@@ -264,7 +276,7 @@ function NearbyDetailSheet({
   }, [place.placeId]);
 
   return (
-    <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-2 rounded-t-3xl border-t border-border bg-surface p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] shadow-2xl">
+    <div className="map-detail-sheet absolute inset-x-0 bottom-0 z-10 flex max-h-[min(60%,28rem)] flex-col gap-2 overflow-y-auto overscroll-contain rounded-t-3xl border-t border-border bg-surface p-5 pb-5 shadow-2xl">
       <div className="mx-auto -mt-1.5 mb-1 h-1 w-9 rounded-full bg-border" aria-hidden />
       <div className="flex items-start justify-between gap-2">
         <div>
@@ -322,7 +334,7 @@ function DetailSheet({
   const Icon = meta.icon;
 
   return (
-    <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-2 rounded-t-3xl border-t border-border bg-surface p-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] shadow-2xl">
+    <div className="map-detail-sheet absolute inset-x-0 bottom-0 z-10 flex max-h-[min(60%,28rem)] flex-col gap-2 overflow-y-auto overscroll-contain rounded-t-3xl border-t border-border bg-surface p-5 pb-5 shadow-2xl">
       <div className="mx-auto -mt-1.5 mb-1 h-1 w-9 rounded-full bg-border" aria-hidden />
       <div className="flex items-start justify-between gap-2">
         <div>

@@ -65,7 +65,7 @@ export default async function MapPage({
   }
 
   return (
-    <div className="relative flex flex-1 flex-col">
+    <div className="fixed inset-x-0 top-0 bottom-[calc(3.25rem+env(safe-area-inset-bottom))] mx-auto flex max-w-screen-sm flex-col overflow-hidden overscroll-none">
       {dayIndex !== null && (
         <div className="absolute inset-x-0 top-0 z-10 flex justify-center pt-[calc(env(safe-area-inset-top)+0.75rem)]">
           <Link

@@ -12,13 +12,11 @@ import Point from "@arcgis/core/geometry/Point.js";
 import Polyline from "@arcgis/core/geometry/Polyline.js";
 import SimpleMarkerSymbol from "@arcgis/core/symbols/SimpleMarkerSymbol.js";
 import SimpleLineSymbol from "@arcgis/core/symbols/SimpleLineSymbol.js";
-import CIMSymbol from "@arcgis/core/symbols/CIMSymbol.js";
 import PictureMarkerSymbol from "@arcgis/core/symbols/PictureMarkerSymbol.js";
 import TextSymbol from "@arcgis/core/symbols/TextSymbol.js";
 import { queryPlacesWithinExtent } from "@arcgis/core/rest/places.js";
 import PlacesQueryParameters from "@arcgis/core/rest/support/PlacesQueryParameters.js";
 import type PlaceResult from "@arcgis/core/rest/support/PlaceResult.js";
-import type { CIMSymbolReference } from "@arcgis/core/symbols/cim/types.js";
 import "@arcgis/core/assets/esri/themes/light/main.css";
 import { CATEGORY_META } from "@/lib/categories";
 import type { UserLocation } from "./TripMap";
@@ -332,34 +330,6 @@ export function ArcgisMapCanvas({
 
     let placesRequest: AbortController | null = null;
     let lastPlacesExtentKey = "";
-    const cimSymbolCache = new Map<string, Promise<CIMSymbol>>();
-
-    const loadCimSymbol = (url: string, signal: AbortSignal) => {
-      const cached = cimSymbolCache.get(url);
-      if (cached) return cached.then((symbol) => symbol.clone());
-
-      const pending = fetch(url, { signal })
-        .then((response) => {
-          if (!response.ok) throw new Error("Place symbol could not be loaded");
-          return response.json() as Promise<CIMSymbolReference["symbol"]>;
-        })
-        .then(
-          (symbol) =>
-            new CIMSymbol({
-              data: {
-                type: "CIMSymbolReference",
-                symbol,
-              },
-            })
-        )
-        .catch((error) => {
-          cimSymbolCache.delete(url);
-          throw error;
-        });
-      cimSymbolCache.set(url, pending);
-      return pending.then((symbol) => symbol.clone());
-    };
-
     const nearbyHandle = reactiveUtils.watch(
       () => view.stationary,
       async (stationary) => {
@@ -395,7 +365,7 @@ export function ArcgisMapCanvas({
             apiKey,
             extent: visibleExtent,
             pageSize: 20,
-            icon: "cim",
+            icon: "svg",
           });
 
           while (query && places.length < 200) {
@@ -410,43 +380,34 @@ export function ArcgisMapCanvas({
           const uniquePlaces = Array.from(
             new Map(places.map((place) => [place.placeId, place])).values()
           );
-          const graphics = await Promise.all(
-            uniquePlaces.map(async (place) => {
-              const category = place.categories[0]?.label ?? "Place";
-              const attributes = {
-                kind: "nearby",
-                placeId: place.placeId,
-                name: place.name,
-                category,
-                lat: place.location.latitude,
-                lng: place.location.longitude,
-              };
-              const point = new Point({
-                longitude: place.location.longitude,
-                latitude: place.location.latitude,
-              });
-              const fallbackSymbol = () =>
-                new PictureMarkerSymbol({
-                  url: "https://static.arcgis.com/icons/places/Default_Shop_or_Service_15.svg",
-                  width: 18,
-                  height: 18,
-                });
-              const symbol = place.icon?.url
-                ? await loadCimSymbol(place.icon.url, request.signal).catch(
-                    (error) => {
-                      if ((error as Error).name === "AbortError") throw error;
-                      return fallbackSymbol();
-                    }
-                  )
-                : fallbackSymbol();
+          const graphics = uniquePlaces.map((place) => {
+            const category = place.categories[0]?.label ?? "Place";
+            const attributes = {
+              kind: "nearby",
+              placeId: place.placeId,
+              name: place.name,
+              category,
+              lat: place.location.latitude,
+              lng: place.location.longitude,
+            };
+            const point = new Point({
+              longitude: place.location.longitude,
+              latitude: place.location.latitude,
+            });
+            const symbol = new PictureMarkerSymbol({
+              url:
+                place.icon?.url ??
+                "https://static.arcgis.com/icons/places/Default_Shop_or_Service_15.svg",
+              width: 15,
+              height: 15,
+            });
 
-              return new Graphic({
-                geometry: point,
-                symbol,
-                attributes,
-              });
-            })
-          );
+            return new Graphic({
+              geometry: point,
+              symbol,
+              attributes,
+            });
+          });
           if (request !== placesRequest) return;
 
           nearbyLayer.removeAll();
