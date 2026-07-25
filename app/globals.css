@@ -117,6 +117,23 @@ body {
   transform: scale(0.98);
 }
 
+@keyframes map-detail-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+}
+
+.map-detail-sheet {
+  animation: map-detail-sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-detail-sheet {
+    animation: none;
+  }
+}
+
 /* Sun/moon glyphs in the theme toggle — both render; CSS (not JS state)
    decides which is visible, so there's no mounted-state flicker. */
 [data-theme-icon="sun"],
