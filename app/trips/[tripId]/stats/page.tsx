@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireTripAccess } from "@/lib/trip-access";
 import { prisma } from "@/lib/prisma";
 import { CATEGORIES, CATEGORY_META } from "@/lib/categories";
+import { LinkPendingIndicator } from "@/components/LinkPendingIndicator";
 
 export default async function StatsPage({
   params,
@@ -9,13 +10,14 @@ export default async function StatsPage({
   params: Promise<{ tripId: string }>;
 }) {
   const { tripId } = await params;
-  await requireTripAccess(tripId, "VIEWER");
-
-  const counts = await prisma.attraction.groupBy({
-    by: ["category"],
-    where: { tripId },
-    _count: { _all: true },
-  });
+  const [, counts] = await Promise.all([
+    requireTripAccess(tripId, "VIEWER"),
+    prisma.attraction.groupBy({
+      by: ["category"],
+      where: { tripId },
+      _count: { _all: true },
+    }),
+  ]);
   const countByCategory = new Map(counts.map((c) => [c.category, c._count._all]));
 
   return (
@@ -43,6 +45,7 @@ export default async function StatsPage({
                 className="absolute top-4 right-4"
                 style={{ color: meta.color }}
               />
+              <LinkPendingIndicator className="right-4 bottom-4 text-primary" />
               <span className="font-mono text-4xl font-bold tabular-nums">
                 {String(count).padStart(2, "0")}
               </span>

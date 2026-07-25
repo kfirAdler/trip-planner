@@ -14,22 +14,22 @@ export default async function SharePage({
   params: Promise<{ tripId: string }>;
 }) {
   const { tripId } = await params;
-  const { member: currentMember } = await requireTripAccess(tripId, "VIEWER");
-  const isOwner = currentMember.role === "OWNER";
-
-  const [members, invites] = await Promise.all([
+  const [{ member: currentMember }, members] = await Promise.all([
+    requireTripAccess(tripId, "VIEWER"),
     prisma.tripMember.findMany({
       where: { tripId },
       include: { user: true },
       orderBy: { createdAt: "asc" },
     }),
-    isOwner
-      ? prisma.tripInvite.findMany({
-          where: { tripId, status: "PENDING" },
-          orderBy: { createdAt: "desc" },
-        })
-      : Promise.resolve([]),
   ]);
+  const isOwner = currentMember.role === "OWNER";
+
+  const invites = isOwner
+    ? await prisma.tripInvite.findMany({
+        where: { tripId, status: "PENDING" },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
 
   const inviteAction = inviteMember.bind(null, tripId);
 

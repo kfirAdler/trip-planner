@@ -15,19 +15,19 @@ export default async function CategoryDetailPage({
   params: Promise<{ tripId: string; category: string }>;
 }) {
   const { tripId, category: categoryParam } = await params;
-  const { trip, member } = await requireTripAccess(tripId, "VIEWER");
-  const canEdit = member.role !== "VIEWER";
-
   const category = categoryParam.toUpperCase() as Category;
   if (!CATEGORIES.includes(category)) notFound();
 
+  const [{ trip, member }, attractions] = await Promise.all([
+    requireTripAccess(tripId, "VIEWER"),
+    prisma.attraction.findMany({
+      where: { tripId, category },
+      orderBy: [{ dayIndex: "asc" }, { position: "asc" }],
+    }),
+  ]);
+  const canEdit = member.role !== "VIEWER";
   const dayCount = differenceInCalendarDays(trip.endDate, trip.startDate) + 1;
   const meta = CATEGORY_META[category];
-
-  const attractions = await prisma.attraction.findMany({
-    where: { tripId, category },
-    orderBy: [{ dayIndex: "asc" }, { position: "asc" }],
-  });
 
   const scheduled = attractions.filter((a) => a.dayIndex !== null);
   const unscheduled = attractions.filter((a) => a.dayIndex === null);
