@@ -16,6 +16,13 @@ type Suggestion =
       text: string;
       subtitle: string;
       placeId: string;
+    }
+  | {
+      id: string;
+      source: "google";
+      text: string;
+      subtitle: string;
+      placeId: string;
     };
 type SearchField = "name" | "address";
 
@@ -108,9 +115,11 @@ export function PlaceAutocomplete({
 
     try {
       const resolutionParams =
-        suggestion.source === "places"
-          ? `placeId=${encodeURIComponent(suggestion.placeId)}`
-          : `text=${encodeURIComponent(suggestion.text)}&magicKey=${encodeURIComponent(suggestion.magicKey)}${biasParams()}`;
+        suggestion.source === "google"
+          ? `source=google&placeId=${encodeURIComponent(suggestion.placeId)}&text=${encodeURIComponent(suggestion.text)}`
+          : suggestion.source === "places"
+            ? `placeId=${encodeURIComponent(suggestion.placeId)}`
+            : `text=${encodeURIComponent(suggestion.text)}&magicKey=${encodeURIComponent(suggestion.magicKey)}${biasParams()}`;
       const response = await fetch(
         `/api/places/resolve?${resolutionParams}`
       );

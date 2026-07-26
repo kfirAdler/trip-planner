@@ -21,6 +21,7 @@ import {
   LogOut,
   Navigation,
   Satellite,
+  Globe,
   type LucideProps,
 } from "lucide-react";
 
@@ -51,3 +52,4 @@ export const IconChevronRight = (props: LucideProps) => <ChevronRight {...defaul
 export const IconLogout = (props: LucideProps) => <LogOut {...defaults} {...props} />;
 export const IconNavigation = (props: LucideProps) => <Navigation {...defaults} {...props} />;
 export const IconSatellite = (props: LucideProps) => <Satellite {...defaults} {...props} />;
+export const IconGlobe = (props: LucideProps) => <Globe {...defaults} {...props} />;
