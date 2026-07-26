@@ -151,6 +151,7 @@ export default async function ItineraryPage({
                     tripId={tripId}
                     dayIndex={dayIndex}
                     searchBias={searchBias}
+                    variant="between"
                   />
                 </div>
               )}

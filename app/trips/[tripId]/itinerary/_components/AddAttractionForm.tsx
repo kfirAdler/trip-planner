@@ -44,9 +44,8 @@ export function AddAttractionForm({
           className="group flex w-full items-center gap-2 py-0.5 text-foreground-muted"
         >
           <span className="h-px flex-1 bg-border/70 transition-colors group-hover:bg-primary/40" />
-          <span className="flex h-7 items-center gap-1 rounded-full border border-border bg-background px-2.5 text-[0.65rem] font-bold tracking-wide transition-colors group-hover:border-primary/50 group-hover:text-primary">
-            <IconAdd size={13} />
-            Add here
+          <span className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background transition-all group-hover:border-primary/50 group-hover:bg-surface group-hover:text-primary">
+            <IconAdd size={14} />
           </span>
           <span className="h-px flex-1 bg-border/70 transition-colors group-hover:bg-primary/40" />
         </button>

@@ -31,6 +31,16 @@ type MappableAttraction = {
   lng: number;
 };
 
+const DISCOVERY_CATEGORY_IDS = [
+  "4d4b7105d754a06374d81259", // Restaurant, including ramen
+  "4bf58dd8d48988d116941735", // Bar
+  "55a59bace4b013909087cb24", // Ramen restaurant
+  "4d954b0ea243a5684a65b473", // Convenience store
+  "63be6904847c3692a84b9bb6", // Cafe, coffee, and tea house
+  "4d4b7104d754a06370d81259", // Arts and entertainment
+  "4d4b7105d754a06377d81259", // Landmarks and outdoors
+];
+
 export type NearbyPlace = {
   placeId: string;
   name: string;
@@ -42,9 +52,9 @@ export type NearbyPlace = {
 function navigationBasemap(isDark: boolean) {
   return new Basemap({
     style: {
-      id: isDark ? "arcgis/navigation-night" : "arcgis/navigation",
+      id: isDark ? "arcgis/streets-night" : "arcgis/streets",
       language: "en",
-      places: "all",
+      places: "none",
     },
   });
 }
@@ -264,6 +274,10 @@ export function ArcgisMapCanvas({
       center: [startingPoint.lng, startingPoint.lat],
       zoom: 12,
       popupEnabled: false,
+      constraints: {
+        maxZoom: 20,
+        snapToZoom: false,
+      },
       // Hides zoom/compass/nav-toggle widgets (pinch-to-zoom is native on
       // mobile); attribution isn't part of this list and always stays visible
       // as required by Esri's terms of use.
@@ -330,6 +344,41 @@ export function ArcgisMapCanvas({
 
     let placesRequest: AbortController | null = null;
     let lastPlacesExtentKey = "";
+    const placeIconCache = new Map<string, Promise<string>>();
+
+    const loadCirclelessPlaceIcon = (url: string, signal: AbortSignal) => {
+      const cached = placeIconCache.get(url);
+      if (cached) return cached;
+
+      const pending = fetch(url, { signal })
+        .then((response) => {
+          if (!response.ok) throw new Error("Place icon could not be loaded");
+          return response.text();
+        })
+        .then((svg) => {
+          const background =
+            svg.match(
+              /<g[^>]*data-name="BACKGROUND[^"]*"[^>]*>[\s\S]*?<\/g>/i
+            )?.[0] ?? "";
+          const categoryColor =
+            Array.from(background.matchAll(/fill:(#[0-9a-f]{3,8})/gi))
+              .map((match) => match[1])
+              .find((color) => color.toLowerCase() !== "#fff") ?? "#52606d";
+          const circlelessSvg = svg
+            .replace(background, "")
+            .replace(/fill:#fff/gi, `fill:${categoryColor}`);
+
+          return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(circlelessSvg)}`;
+        })
+        .catch((error) => {
+          placeIconCache.delete(url);
+          throw error;
+        });
+
+      placeIconCache.set(url, pending);
+      return pending;
+    };
+
     const nearbyHandle = reactiveUtils.watch(
       () => view.stationary,
       async (stationary) => {
@@ -364,6 +413,7 @@ export function ArcgisMapCanvas({
           let query: PlacesQueryParameters | null = new PlacesQueryParameters({
             apiKey,
             extent: visibleExtent,
+            categoryIds: DISCOVERY_CATEGORY_IDS,
             pageSize: 20,
             icon: "svg",
           });
@@ -380,34 +430,43 @@ export function ArcgisMapCanvas({
           const uniquePlaces = Array.from(
             new Map(places.map((place) => [place.placeId, place])).values()
           );
-          const graphics = uniquePlaces.map((place) => {
-            const category = place.categories[0]?.label ?? "Place";
-            const attributes = {
-              kind: "nearby",
-              placeId: place.placeId,
-              name: place.name,
-              category,
-              lat: place.location.latitude,
-              lng: place.location.longitude,
-            };
-            const point = new Point({
-              longitude: place.location.longitude,
-              latitude: place.location.latitude,
-            });
-            const symbol = new PictureMarkerSymbol({
-              url:
-                place.icon?.url ??
-                "https://static.arcgis.com/icons/places/Default_Shop_or_Service_15.svg",
-              width: 15,
-              height: 15,
-            });
+          const graphics = (
+            await Promise.all(
+              uniquePlaces.map(async (place) => {
+                if (!place.icon?.url) return null;
 
-            return new Graphic({
-              geometry: point,
-              symbol,
-              attributes,
-            });
-          });
+                const iconUrl = await loadCirclelessPlaceIcon(
+                  place.icon.url,
+                  request.signal
+                ).catch((error) => {
+                  if ((error as Error).name === "AbortError") throw error;
+                  return null;
+                });
+                if (!iconUrl) return null;
+
+                const category = place.categories[0]?.label ?? "Place";
+                return new Graphic({
+                  geometry: new Point({
+                    longitude: place.location.longitude,
+                    latitude: place.location.latitude,
+                  }),
+                  symbol: new PictureMarkerSymbol({
+                    url: iconUrl,
+                    width: 18,
+                    height: 18,
+                  }),
+                  attributes: {
+                    kind: "nearby",
+                    placeId: place.placeId,
+                    name: place.name,
+                    category,
+                    lat: place.location.latitude,
+                    lng: place.location.longitude,
+                  },
+                });
+              })
+            )
+          ).filter((graphic): graphic is Graphic => graphic !== null);
           if (request !== placesRequest) return;
 
           nearbyLayer.removeAll();
