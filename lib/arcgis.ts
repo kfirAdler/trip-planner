@@ -194,6 +194,46 @@ export async function resolveGeocodedPlace(
   };
 }
 
+// Plain-text fallback used when a Google-sourced place fails to resolve:
+// no magicKey available, so this just geocodes the suggestion's own text.
+export async function resolveAddressText(
+  text: string,
+  bias?: PlaceSearchBias
+): Promise<ResolvedPlace | null> {
+  const token = process.env.ARCGIS_API_KEY;
+  if (!token) return null;
+
+  const url = new URL(CANDIDATES_URL);
+  url.searchParams.set("f", "json");
+  url.searchParams.set("token", token);
+  url.searchParams.set("singleLine", text);
+  url.searchParams.set("countryCode", "JPN");
+  url.searchParams.set(
+    "location",
+    bias ? `${bias.lng},${bias.lat}` : JAPAN_BIAS_LOCATION
+  );
+  url.searchParams.set("outFields", "PlaceName,ShortLabel,Match_addr");
+
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) return null;
+
+  const data = await res.json();
+  const best = data.candidates?.[0];
+  if (!best?.location) return null;
+
+  return {
+    name:
+      (best.attributes?.PlaceName as string | undefined) ||
+      (best.attributes?.ShortLabel as string | undefined) ||
+      String(best.address).split(",")[0],
+    address:
+      (best.attributes?.Match_addr as string | undefined) ||
+      (best.address as string),
+    lat: best.location.y as number,
+    lng: best.location.x as number,
+  };
+}
+
 export async function resolveBusinessPlace(
   placeId: string
 ): Promise<ResolvedPlace | null> {

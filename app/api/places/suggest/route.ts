@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { suggestPlaces } from "@/lib/arcgis";
+import { suggestGooglePlaces } from "@/lib/google-places";
 
 function readBias(request: NextRequest) {
   const latValue = request.nextUrl.searchParams.get("lat");
@@ -34,10 +35,15 @@ export async function GET(request: NextRequest) {
     request.nextUrl.searchParams.get("field") === "address"
       ? "address"
       : "name";
-  const suggestions = await suggestPlaces(
-    query,
-    readBias(request),
-    field
-  );
+  const bias = readBias(request);
+
+  // Google Places is the primary source; ArcGIS (already free, no billing
+  // account required) is the fallback when Google is unset or returns
+  // nothing — e.g. a query it doesn't recognize, or a transient failure.
+  const googleSuggestions = await suggestGooglePlaces(query, bias, field);
+  const suggestions =
+    googleSuggestions.length > 0
+      ? googleSuggestions
+      : await suggestPlaces(query, bias, field);
   return NextResponse.json({ suggestions });
 }

@@ -7,6 +7,7 @@ import {
   IconBack,
   IconChevronRight,
   IconClose,
+  IconGlobe,
   IconMap,
   IconNavigation,
   IconPin,
@@ -14,6 +15,8 @@ import {
 } from "@/components/icons";
 import type { MapBasemap, NearbyPlace } from "./ArcgisMapCanvas";
 import type { Category } from "@/app/generated/prisma/client";
+
+type MapProvider = "arcgis" | "google-beta";
 
 type MappableAttraction = {
   id: string;
@@ -66,13 +69,27 @@ const ArcgisMapCanvas = dynamic(
   }
 );
 
+const GoogleMapCanvas = dynamic(
+  () => import("./GoogleMapCanvas").then((mod) => mod.GoogleMapCanvas),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="absolute inset-0 flex items-center justify-center bg-surface-muted">
+        <p className="text-sm font-light text-foreground-muted">Loading map…</p>
+      </div>
+    ),
+  }
+);
+
 export function TripMap({
   attractions,
   apiKey,
+  googleApiKey,
   initialCenter,
 }: {
   attractions: MappableAttraction[];
   apiKey: string;
+  googleApiKey?: string;
   initialCenter?: { lat: number; lng: number };
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -80,6 +97,9 @@ export function TripMap({
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locateRequest, setLocateRequest] = useState(0);
   const [basemap, setBasemap] = useState<MapBasemap>("streets");
+  // ArcGIS stays the default, existing behavior — Google is an opt-in
+  // (beta) alternative the traveler can switch to and back at will.
+  const [mapProvider, setMapProvider] = useState<MapProvider>("arcgis");
   const byId = useMemo(() => new Map(attractions.map((a) => [a.id, a])), [attractions]);
   const selected = selectedId ? byId.get(selectedId) : null;
   const selectedIndex = selected
@@ -204,50 +224,97 @@ export function TripMap({
 
   return (
     <div className="relative min-h-0 flex-1 overflow-hidden">
-      <ArcgisMapCanvas
-        attractions={attractions}
-        apiKey={apiKey}
-        initialCenter={initialCenter}
-        userLocation={userLocation}
-        locateRequest={locateRequest}
-        basemap={basemap}
-        selectedId={selectedId}
-        selectedNearby={selectedNearby}
-        onSelect={(id) => {
-          if (id) setSelectedNearby(null);
-          setSelectedId(id);
-        }}
-        onNearbySelect={(place) => {
-          if (place) setSelectedId(null);
-          setSelectedNearby(place);
-        }}
-      />
-      <button
-        type="button"
-        onClick={() =>
-          setBasemap((current) =>
-            current === "streets" ? "satellite" : "streets"
-          )
-        }
-        aria-label={
-          basemap === "streets"
-            ? "Switch to satellite view"
-            : "Switch to street map"
-        }
-        className="absolute right-4 top-[calc(env(safe-area-inset-top)+4.25rem)] z-10 flex h-10 items-center gap-2 rounded-full border border-border bg-surface/95 px-3 text-xs font-bold text-foreground shadow-lg backdrop-blur transition-transform active:scale-95"
-      >
-        {basemap === "streets" ? (
-          <>
-            <IconSatellite size={16} />
-            Satellite
-          </>
-        ) : (
-          <>
-            <IconMap size={16} />
-            Map
-          </>
-        )}
-      </button>
+      {mapProvider === "google-beta" && googleApiKey ? (
+        <GoogleMapCanvas
+          attractions={attractions}
+          apiKey={googleApiKey}
+          initialCenter={initialCenter}
+          userLocation={userLocation}
+          locateRequest={locateRequest}
+          selectedId={selectedId}
+          onSelect={(id) => {
+            if (id) setSelectedNearby(null);
+            setSelectedId(id);
+          }}
+        />
+      ) : (
+        <ArcgisMapCanvas
+          attractions={attractions}
+          apiKey={apiKey}
+          initialCenter={initialCenter}
+          userLocation={userLocation}
+          locateRequest={locateRequest}
+          basemap={basemap}
+          selectedId={selectedId}
+          selectedNearby={selectedNearby}
+          onSelect={(id) => {
+            if (id) setSelectedNearby(null);
+            setSelectedId(id);
+          }}
+          onNearbySelect={(place) => {
+            if (place) setSelectedId(null);
+            setSelectedNearby(place);
+          }}
+        />
+      )}
+      {googleApiKey && (
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedId(null);
+            setSelectedNearby(null);
+            setMapProvider((current) =>
+              current === "arcgis" ? "google-beta" : "arcgis"
+            );
+          }}
+          aria-label={
+            mapProvider === "arcgis"
+              ? "Switch to Google Maps (beta)"
+              : "Switch to the default map"
+          }
+          className="absolute left-4 top-[calc(env(safe-area-inset-top)+4.25rem)] z-10 flex h-10 items-center gap-2 rounded-full border border-border bg-surface/95 px-3 text-xs font-bold text-foreground shadow-lg backdrop-blur transition-transform active:scale-95"
+        >
+          {mapProvider === "arcgis" ? (
+            <>
+              <IconGlobe size={16} />
+              Google (beta)
+            </>
+          ) : (
+            <>
+              <IconMap size={16} />
+              Map
+            </>
+          )}
+        </button>
+      )}
+      {mapProvider === "arcgis" && (
+        <button
+          type="button"
+          onClick={() =>
+            setBasemap((current) =>
+              current === "streets" ? "satellite" : "streets"
+            )
+          }
+          aria-label={
+            basemap === "streets"
+              ? "Switch to satellite view"
+              : "Switch to street map"
+          }
+          className="absolute right-4 top-[calc(env(safe-area-inset-top)+4.25rem)] z-10 flex h-10 items-center gap-2 rounded-full border border-border bg-surface/95 px-3 text-xs font-bold text-foreground shadow-lg backdrop-blur transition-transform active:scale-95"
+        >
+          {basemap === "streets" ? (
+            <>
+              <IconSatellite size={16} />
+              Satellite
+            </>
+          ) : (
+            <>
+              <IconMap size={16} />
+              Map
+            </>
+          )}
+        </button>
+      )}
       {userLocation && !selected && !selectedNearby && (
         <button
           type="button"

@@ -29,6 +29,10 @@ export default async function MapPage({
   // the authenticated map component instead of requiring a second public env
   // variable.
   const apiKey = process.env.ARCGIS_API_KEY;
+  // Google Maps JS SDK renders client-side, so unlike ARCGIS_API_KEY it
+  // needs a browser-exposed key — same pattern the ArcGIS setup uses for
+  // NEXT_PUBLIC_ARCGIS_API_KEY. The (beta) toggle only appears when this is set.
+  const googleApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const dayCount = differenceInCalendarDays(trip.endDate, trip.startDate) + 1;
 
   const parsedDay = Number(rawDay);
@@ -81,6 +85,7 @@ export default async function MapPage({
       <TripMap
         attractions={mappable}
         apiKey={apiKey}
+        googleApiKey={googleApiKey}
         initialCenter={
           initialLocation?.lat !== null &&
           initialLocation?.lat !== undefined &&
