@@ -7,6 +7,20 @@ const PLACE_DETAILS_URL = "https://places.googleapis.com/v1/places";
 const TOKYO_BIAS = { lat: 35.6812, lng: 139.7671 };
 const BIAS_RADIUS_METERS = 50000;
 
+// Google is tried before the ArcGIS fallback on every call — a slow or
+// hanging request here (unlike a clean error) would stall the whole
+// suggest/resolve response instead of falling back promptly, so every
+// Google fetch is bounded to this timeout regardless of outcome.
+const REQUEST_TIMEOUT_MS = 4000;
+
+function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() =>
+    clearTimeout(timeout)
+  );
+}
+
 export type GooglePlaceSuggestion = {
   id: string;
   source: "google";
@@ -40,7 +54,7 @@ export async function suggestGooglePlaces(
   }
 
   try {
-    const response = await fetch(AUTOCOMPLETE_URL, {
+    const response = await fetchWithTimeout(AUTOCOMPLETE_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -89,7 +103,12 @@ export async function suggestGooglePlaces(
       })
       .filter((s: GooglePlaceSuggestion | null): s is GooglePlaceSuggestion => s !== null);
   } catch (error) {
-    console.error("Google Places autocomplete threw", error);
+    console.error(
+      (error as Error).name === "AbortError"
+        ? "Google Places autocomplete timed out"
+        : "Google Places autocomplete threw",
+      error
+    );
     return [];
   }
 }
@@ -101,7 +120,7 @@ export async function resolveGooglePlace(
   if (!apiKey) return null;
 
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${PLACE_DETAILS_URL}/${encodeURIComponent(placeId)}`,
       {
         headers: {
@@ -132,7 +151,12 @@ export async function resolveGooglePlace(
       lng: location.longitude,
     };
   } catch (error) {
-    console.error("Google Place details threw", error);
+    console.error(
+      (error as Error).name === "AbortError"
+        ? "Google Place details timed out"
+        : "Google Place details threw",
+      error
+    );
     return null;
   }
 }
