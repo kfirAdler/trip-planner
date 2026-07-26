@@ -33,7 +33,7 @@ export default async function SearchPage({
   params: Promise<{ tripId: string }>;
 }) {
   const { tripId } = await params;
-  const [{ trip }, attractions] = await Promise.all([
+  const [{ trip, member }, attractions] = await Promise.all([
     requireTripAccess(tripId, "VIEWER"),
     prisma.attraction.findMany({
       where: { tripId },
@@ -44,7 +44,6 @@ export default async function SearchPage({
         address: true,
         category: true,
         dayIndex: true,
-        position: true,
         time: true,
         lat: true,
         lng: true,
@@ -78,5 +77,28 @@ export default async function SearchPage({
     };
   });
 
-  return <TripSearch tripId={tripId} items={items} />;
+  const located = attractions.filter(
+    (attraction): attraction is typeof attraction & { lat: number; lng: number } =>
+      attraction.lat !== null && attraction.lng !== null
+  );
+  const searchBias =
+    located.length > 0
+      ? {
+          lat:
+            located.reduce((sum, attraction) => sum + attraction.lat, 0) /
+            located.length,
+          lng:
+            located.reduce((sum, attraction) => sum + attraction.lng, 0) /
+            located.length,
+        }
+      : undefined;
+
+  return (
+    <TripSearch
+      tripId={tripId}
+      items={items}
+      canEdit={member.role !== "VIEWER"}
+      searchBias={searchBias}
+    />
+  );
 }
