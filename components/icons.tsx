@@ -20,6 +20,7 @@ import {
   ChevronRight,
   LogOut,
   Navigation,
+  Satellite,
   type LucideProps,
 } from "lucide-react";
 
@@ -49,3 +50,4 @@ export const IconList = (props: LucideProps) => <List {...defaults} {...props} /
 export const IconChevronRight = (props: LucideProps) => <ChevronRight {...defaults} {...props} />;
 export const IconLogout = (props: LucideProps) => <LogOut {...defaults} {...props} />;
 export const IconNavigation = (props: LucideProps) => <Navigation {...defaults} {...props} />;
+export const IconSatellite = (props: LucideProps) => <Satellite {...defaults} {...props} />;

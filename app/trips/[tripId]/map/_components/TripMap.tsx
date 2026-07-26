@@ -7,10 +7,12 @@ import {
   IconBack,
   IconChevronRight,
   IconClose,
+  IconMap,
   IconNavigation,
   IconPin,
+  IconSatellite,
 } from "@/components/icons";
-import type { NearbyPlace } from "./ArcgisMapCanvas";
+import type { MapBasemap, NearbyPlace } from "./ArcgisMapCanvas";
 import type { Category } from "@/app/generated/prisma/client";
 
 type MappableAttraction = {
@@ -77,6 +79,7 @@ export function TripMap({
   const [selectedNearby, setSelectedNearby] = useState<NearbyPlace | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locateRequest, setLocateRequest] = useState(0);
+  const [basemap, setBasemap] = useState<MapBasemap>("streets");
   const byId = useMemo(() => new Map(attractions.map((a) => [a.id, a])), [attractions]);
   const selected = selectedId ? byId.get(selectedId) : null;
   const selectedIndex = selected
@@ -207,6 +210,7 @@ export function TripMap({
         initialCenter={initialCenter}
         userLocation={userLocation}
         locateRequest={locateRequest}
+        basemap={basemap}
         selectedId={selectedId}
         selectedNearby={selectedNearby}
         onSelect={(id) => {
@@ -218,6 +222,32 @@ export function TripMap({
           setSelectedNearby(place);
         }}
       />
+      <button
+        type="button"
+        onClick={() =>
+          setBasemap((current) =>
+            current === "streets" ? "satellite" : "streets"
+          )
+        }
+        aria-label={
+          basemap === "streets"
+            ? "Switch to satellite view"
+            : "Switch to street map"
+        }
+        className="absolute right-4 top-[calc(env(safe-area-inset-top)+4.25rem)] z-10 flex h-10 items-center gap-2 rounded-full border border-border bg-surface/95 px-3 text-xs font-bold text-foreground shadow-lg backdrop-blur transition-transform active:scale-95"
+      >
+        {basemap === "streets" ? (
+          <>
+            <IconSatellite size={16} />
+            Satellite
+          </>
+        ) : (
+          <>
+            <IconMap size={16} />
+            Map
+          </>
+        )}
+      </button>
       {userLocation && !selected && !selectedNearby && (
         <button
           type="button"

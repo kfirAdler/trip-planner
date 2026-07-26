@@ -49,10 +49,17 @@ export type NearbyPlace = {
   lng: number;
 };
 
-function navigationBasemap(isDark: boolean) {
+export type MapBasemap = "streets" | "satellite";
+
+function mapBasemap(style: MapBasemap, isDark: boolean) {
   return new Basemap({
     style: {
-      id: isDark ? "arcgis/streets-night" : "arcgis/streets",
+      id:
+        style === "satellite"
+          ? "arcgis/imagery"
+          : isDark
+            ? "arcgis/streets-night"
+            : "arcgis/streets",
       language: "en",
       places: "none",
     },
@@ -105,6 +112,7 @@ export function ArcgisMapCanvas({
   initialCenter,
   userLocation,
   locateRequest,
+  basemap,
   selectedId,
   selectedNearby,
   onSelect,
@@ -115,6 +123,7 @@ export function ArcgisMapCanvas({
   initialCenter?: { lat: number; lng: number };
   userLocation: UserLocation | null;
   locateRequest: number;
+  basemap: MapBasemap;
   selectedId: string | null;
   selectedNearby: NearbyPlace | null;
   onSelect: (id: string | null) => void;
@@ -122,8 +131,11 @@ export function ArcgisMapCanvas({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<MapView | null>(null);
+  const mapRef = useRef<EsriMap | null>(null);
   const userLocationLayerRef = useRef<GraphicsLayer | null>(null);
   const userLocationRef = useRef(userLocation);
+  const basemapRef = useRef(basemap);
+  const isDarkRef = useRef(false);
   // Keep the latest callback/data available to the click handler without
   // re-running the whole setup effect (which would tear down/rebuild the map).
   const onSelectRef = useRef(onSelect);
@@ -142,6 +154,12 @@ export function ArcgisMapCanvas({
     const layer = userLocationLayerRef.current;
     if (layer) drawUserLocation(layer, userLocation);
   }, [userLocation]);
+
+  useEffect(() => {
+    basemapRef.current = basemap;
+    const map = mapRef.current;
+    if (map) map.basemap = mapBasemap(basemap, isDarkRef.current);
+  }, [basemap]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -192,6 +210,7 @@ export function ArcgisMapCanvas({
     const isDark = document.documentElement.dataset.theme
       ? document.documentElement.dataset.theme === "dark"
       : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    isDarkRef.current = isDark;
 
     const byDay = new Map<number, MappableAttraction[]>();
     for (const attraction of attractions) {
@@ -262,9 +281,10 @@ export function ArcgisMapCanvas({
     drawUserLocation(userLocationLayer, userLocationRef.current);
 
     const map = new EsriMap({
-      basemap: navigationBasemap(isDark),
+      basemap: mapBasemap(basemapRef.current, isDark),
       layers: [routeLayer, nearbyLayer, markerLayer, userLocationLayer],
     });
+    mapRef.current = map;
 
     const first = attractions[0];
     const startingPoint = first ?? initialCenter ?? { lat: 35.6812, lng: 139.7671 };
@@ -291,14 +311,16 @@ export function ArcgisMapCanvas({
       const theme = (event as CustomEvent<{ theme: "light" | "dark" }>).detail
         .theme;
       const nextIsDark = theme === "dark";
-      map.basemap = navigationBasemap(nextIsDark);
+      isDarkRef.current = nextIsDark;
+      map.basemap = mapBasemap(basemapRef.current, nextIsDark);
       routeLayer.graphics.forEach((graphic) => {
         graphic.symbol = routeLineSymbol(nextIsDark);
       });
     };
     const handleSystemThemeChange = (event: MediaQueryListEvent) => {
       if (!document.documentElement.dataset.theme) {
-        map.basemap = navigationBasemap(event.matches);
+        isDarkRef.current = event.matches;
+        map.basemap = mapBasemap(basemapRef.current, event.matches);
         routeLayer.graphics.forEach((graphic) => {
           graphic.symbol = routeLineSymbol(event.matches);
         });
@@ -494,6 +516,7 @@ export function ArcgisMapCanvas({
       clickHandle.remove();
       nearbyHandle.remove();
       placesRequest?.abort();
+      mapRef.current = null;
       userLocationLayerRef.current = null;
       viewRef.current = null;
       view.destroy();
