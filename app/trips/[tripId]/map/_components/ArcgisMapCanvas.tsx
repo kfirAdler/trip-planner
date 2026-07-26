@@ -136,6 +136,7 @@ export function ArcgisMapCanvas({
   const userLocationRef = useRef(userLocation);
   const basemapRef = useRef(basemap);
   const isDarkRef = useRef(false);
+  const selectedIdRef = useRef(selectedId);
   // Keep the latest callback/data available to the click handler without
   // re-running the whole setup effect (which would tear down/rebuild the map).
   const onSelectRef = useRef(onSelect);
@@ -148,6 +149,10 @@ export function ArcgisMapCanvas({
   useEffect(() => {
     onNearbySelectRef.current = onNearbySelect;
   }, [onNearbySelect]);
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   useEffect(() => {
     userLocationRef.current = userLocation;
@@ -287,7 +292,7 @@ export function ArcgisMapCanvas({
     mapRef.current = map;
 
     const first = attractions[0];
-    const startingPoint = first ?? initialCenter ?? { lat: 35.6812, lng: 139.7671 };
+    const startingPoint = initialCenter ?? first ?? { lat: 35.6812, lng: 139.7671 };
     const view = new MapView({
       container: containerRef.current,
       map,
@@ -504,7 +509,7 @@ export function ArcgisMapCanvas({
 
     view
       .when(() => {
-        if (attractions.length > 1) {
+        if (attractions.length > 1 && !selectedIdRef.current) {
           return view.goTo(pointGraphics, { animate: false });
         }
       })

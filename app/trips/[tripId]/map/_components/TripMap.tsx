@@ -86,13 +86,17 @@ export function TripMap({
   apiKey,
   googleApiKey,
   initialCenter,
+  initialSelectedId,
 }: {
   attractions: MappableAttraction[];
   apiKey: string;
   googleApiKey?: string;
   initialCenter?: { lat: number; lng: number };
+  initialSelectedId?: string;
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialSelectedId ?? null
+  );
   const [selectedNearby, setSelectedNearby] = useState<NearbyPlace | null>(null);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [locateRequest, setLocateRequest] = useState(0);

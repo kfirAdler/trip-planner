@@ -6,6 +6,7 @@ import {
   IconHome,
   IconItinerary,
   IconMap,
+  IconSearch,
   IconStats,
   IconShare,
 } from "@/components/icons";
@@ -14,6 +15,7 @@ import { LinkPendingIndicator } from "@/components/LinkPendingIndicator";
 const TABS = [
   { href: "", label: "Home", Icon: IconHome },
   { href: "/itinerary", label: "Itinerary", Icon: IconItinerary },
+  { href: "/search", label: "Search", Icon: IconSearch },
   { href: "/map", label: "Map", Icon: IconMap },
   { href: "/stats", label: "Stats", Icon: IconStats },
   { href: "/share", label: "Share", Icon: IconShare },
@@ -37,7 +39,7 @@ export function TripTabBar({ tripId }: { tripId: string }) {
             key={href}
             href={fullHref}
             prefetch={href === "/stats" ? true : null}
-            className="relative flex min-h-[3.25rem] flex-1 flex-col items-center justify-center gap-0.5 text-xs"
+            className="relative flex min-h-[3.25rem] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[0.68rem] sm:text-xs"
           >
             {isActive && (
               <span

@@ -259,11 +259,7 @@ export function AttractionRow({
 
             {attraction.lat !== null && attraction.lng !== null && (
               <Link
-                href={
-                  attraction.dayIndex === null
-                    ? `/trips/${tripId}/map`
-                    : `/trips/${tripId}/map?day=${attraction.dayIndex + 1}`
-                }
+                href={`/trips/${tripId}/map?place=${encodeURIComponent(attraction.id)}`}
                 className="mt-3 flex w-fit items-center gap-1.5 rounded-full bg-surface-muted px-3 py-1.5 text-xs font-bold text-primary"
               >
                 <IconMap size={14} />

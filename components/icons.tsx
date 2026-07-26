@@ -22,6 +22,7 @@ import {
   Navigation,
   Satellite,
   Globe,
+  Search,
   type LucideProps,
 } from "lucide-react";
 
@@ -53,3 +54,4 @@ export const IconLogout = (props: LucideProps) => <LogOut {...defaults} {...prop
 export const IconNavigation = (props: LucideProps) => <Navigation {...defaults} {...props} />;
 export const IconSatellite = (props: LucideProps) => <Satellite {...defaults} {...props} />;
 export const IconGlobe = (props: LucideProps) => <Globe {...defaults} {...props} />;
+export const IconSearch = (props: LucideProps) => <Search {...defaults} {...props} />;
