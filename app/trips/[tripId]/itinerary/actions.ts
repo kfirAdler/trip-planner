@@ -161,6 +161,9 @@ export async function addUnscheduledAttraction(
   formData: FormData
 ) {
   const { userId } = await requireTripActionAccess(tripId, "EDITOR");
+  const parsedCategory = z.enum(CATEGORIES as [string, ...string[]]).parse(
+    category
+  ) as Category;
 
   const latRaw = formData.get("lat");
   const lngRaw = formData.get("lng");
@@ -185,7 +188,7 @@ export async function addUnscheduledAttraction(
     data: {
       tripId,
       name: parsed.name,
-      category,
+      category: parsedCategory,
       dayIndex: null,
       position: 0,
       time: parsed.time || null,
@@ -198,9 +201,10 @@ export async function addUnscheduledAttraction(
     },
   });
 
-  revalidatePath(`/trips/${tripId}/stats/${category.toLowerCase()}`);
+  revalidatePath(`/trips/${tripId}/stats/${parsedCategory.toLowerCase()}`);
   revalidatePath(`/trips/${tripId}/stats`);
   revalidatePath(`/trips/${tripId}/map`);
+  revalidatePath(`/trips/${tripId}/search`);
   revalidatePath(`/trips/${tripId}`);
 }
 

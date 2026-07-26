@@ -10,9 +10,9 @@ export default async function MapPage({
   searchParams,
 }: {
   params: Promise<{ tripId: string }>;
-  searchParams: Promise<{ day?: string }>;
+  searchParams: Promise<{ day?: string; place?: string }>;
 }) {
-  const [{ tripId }, { day: rawDay }] = await Promise.all([
+  const [{ tripId }, { day: rawDay, place: rawPlace }] = await Promise.all([
     params,
     searchParams,
   ]);
@@ -45,12 +45,25 @@ export default async function MapPage({
     ...all.filter((attraction) => attraction.dayIndex !== null),
     ...all.filter((attraction) => attraction.dayIndex === null),
   ];
+  const requestedPlace = rawPlace
+    ? ordered.find(
+        (attraction) =>
+          attraction.id === rawPlace &&
+          attraction.lat !== null &&
+          attraction.lng !== null
+      )
+    : undefined;
   const mappable = ordered
     .filter(
       (a): a is typeof a & { lat: number; lng: number } =>
         a.lat !== null && a.lng !== null
     )
-    .filter((a) => dayIndex === null || a.dayIndex === dayIndex)
+    .filter(
+      (a) =>
+        requestedPlace !== undefined ||
+        dayIndex === null ||
+        a.dayIndex === dayIndex
+    )
     .map((attraction, index) => ({
       ...attraction,
       routeOrder: index + 1,
@@ -86,11 +99,16 @@ export default async function MapPage({
         attractions={mappable}
         apiKey={apiKey}
         googleApiKey={googleApiKey}
+        initialSelectedId={requestedPlace?.id}
         initialCenter={
-          initialLocation?.lat !== null &&
-          initialLocation?.lat !== undefined &&
-          initialLocation.lng !== null
-            ? { lat: initialLocation.lat, lng: initialLocation.lng }
+          requestedPlace?.lat !== null &&
+          requestedPlace?.lat !== undefined &&
+          requestedPlace.lng !== null
+            ? { lat: requestedPlace.lat, lng: requestedPlace.lng }
+            : initialLocation?.lat !== null &&
+                initialLocation?.lat !== undefined &&
+                initialLocation.lng !== null
+              ? { lat: initialLocation.lat, lng: initialLocation.lng }
             : undefined
         }
       />

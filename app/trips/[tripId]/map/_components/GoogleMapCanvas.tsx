@@ -169,11 +169,16 @@ export function GoogleMapCanvas({
   const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
   const userMarkerRef = useRef<google.maps.Marker | null>(null);
   const onSelectRef = useRef(onSelect);
+  const selectedIdRef = useRef(selectedId);
   const themeCleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     onSelectRef.current = onSelect;
   }, [onSelect]);
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,7 +188,7 @@ export function GoogleMapCanvas({
         if (cancelled || !containerRef.current) return;
 
         const first = attractions[0];
-        const startingPoint = first ?? initialCenter ?? DEFAULT_CENTER;
+        const startingPoint = initialCenter ?? first ?? DEFAULT_CENTER;
         const isDark = currentIsDark();
 
         const map = new maps.maps.Map(containerRef.current, {
@@ -249,7 +254,16 @@ export function GoogleMapCanvas({
 
         markersRef.current = markers;
 
-        if (attractions.length > 1) {
+        const initiallySelected = attractions.find(
+          (attraction) => attraction.id === selectedIdRef.current
+        );
+        if (initiallySelected) {
+          map.setCenter({
+            lat: initiallySelected.lat,
+            lng: initiallySelected.lng,
+          });
+          map.setZoom(14);
+        } else if (attractions.length > 1) {
           map.fitBounds(bounds, 60);
         }
       })
