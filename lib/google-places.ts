@@ -49,7 +49,14 @@ export async function suggestGooglePlaces(
       body: JSON.stringify(body),
       cache: "no-store",
     });
-    if (!response.ok) return [];
+    if (!response.ok) {
+      console.error(
+        "Google Places autocomplete failed",
+        response.status,
+        await response.text().catch(() => "")
+      );
+      return [];
+    }
 
     const data = await response.json();
     const suggestions = data.suggestions;
@@ -81,7 +88,8 @@ export async function suggestGooglePlaces(
         };
       })
       .filter((s: GooglePlaceSuggestion | null): s is GooglePlaceSuggestion => s !== null);
-  } catch {
+  } catch (error) {
+    console.error("Google Places autocomplete threw", error);
     return [];
   }
 }
@@ -103,7 +111,14 @@ export async function resolveGooglePlace(
         cache: "no-store",
       }
     );
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.error(
+        "Google Place details failed",
+        response.status,
+        await response.text().catch(() => "")
+      );
+      return null;
+    }
 
     const data = await response.json();
     const name = data.displayName?.text;
@@ -116,7 +131,8 @@ export async function resolveGooglePlace(
       lat: location.latitude,
       lng: location.longitude,
     };
-  } catch {
+  } catch (error) {
+    console.error("Google Place details threw", error);
     return null;
   }
 }
